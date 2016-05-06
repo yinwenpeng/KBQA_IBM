@@ -674,13 +674,8 @@ def mention2IDs(mention, word2ids, mention2ids):
 #         ids|=  set( [entry[0] for entry in  sorted_id_times[:2] ] )
     ids+=  [entry[0] for entry in  sorted_id_times] 
     return ids  
-def query2IDs(mention, word2ids):
 
-    sett=word2ids.get(mention)  
-    if sett is None:
-        return []
-    else:
-        return list(sett)
+
 def remove_noisestr(question, overall_ids, id2names):
 #     print 'question:', question
     orig_overall_ids=overall_ids[:]
@@ -702,7 +697,7 @@ def remove_noisestr(question, overall_ids, id2names):
 #         return overall_ids    
     return overall_ids
 
-def lcsubstring_length(a,question_pos_list, b):
+def lcsubstring_length(a, b):
     
     len_a=len(a)
     len_b=len(b)
@@ -718,11 +713,11 @@ def lcsubstring_length(a,question_pos_list, b):
                     a_label[i-1]=1
 
     
-    left=-1
-    for ind, value in enumerate(a_label):
-        if value ==1:
-            left=ind+1
-            break
+#     left=-1
+#     for ind, value in enumerate(a_label):
+#         if value ==1:
+#             left=ind+1
+#             break
     right=-1
     for ind, value in enumerate(a_label[::-1]):
         if value ==1:
@@ -738,8 +733,8 @@ def lcsubstring_length(a,question_pos_list, b):
 #     posi_importance=(len_a-start)*1.0/len_a
     posi_importance=middle*1.0/len_a
 #     print left, right, question_pos_list, a, b
-    postag_importance=numpy.mean(question_pos_list[left-1:right])
-    return l*1.0/len_b+l*0.6/len_a+0.2*posi_importance#+0.1*postag_importance
+#     postag_importance=numpy.mean(question_pos_list[left-1:right])
+    return l*1.0/len_b+l*0.6/len_a+0.1*posi_importance#+0.1*postag_importance
                     
 
 def substringRato(list1, list2):
@@ -752,7 +747,7 @@ def substringRato(list1, list2):
 #     cover=overall_size-len(set(list2)-set(list1))
     return cover*1.0/len(list2)
 
-def ranking_ids_topN(question_list, question_pos_list, interset_id_set_w345, id2names, N):
+def ranking_ids_topN(question_list, interset_id_set_w345, id2names, N):
     id2score={}
     weights=[0.4, 0.15, 0.2, 0.25]
     for idd in interset_id_set_w345:
@@ -762,7 +757,7 @@ def ranking_ids_topN(question_list, question_pos_list, interset_id_set_w345, id2
 #         threegram_querys=str2ngrams_list(name, 3)
 #         fourgram_querys=str2ngrams_list(name, 4)
 #         fivegram_querys=str2ngrams_list(name, 5)    
-        word_simi=lcsubstring_length(question_list, question_pos_list, name_words)
+        word_simi=lcsubstring_length(question_list, name_words)
 #         three_simi=lcsubstring_length(threegram_mens, threegram_querys)
 #         four_simi=lcsubstring_length(fourgram_mens, fourgram_querys)
 #         five_simi=lcsubstring_length(fivegram_mens, fivegram_querys)
@@ -774,25 +769,13 @@ def ranking_ids_topN(question_list, question_pos_list, interset_id_set_w345, id2
 #         if idd=='m.04whkz5':
 #             exit(0)
     sorted_map=sorted(id2score.items(), key=operator.itemgetter(1), reverse=True)
-#     for tup in sorted_map[:N]:
-#         idd=tup[0]
-#         name=id2names.get(idd)
-# #         print 'name:', name
-#         name_words=name.split()
-# #         threegram_querys=str2ngrams_list(name, 3)
-# #         fourgram_querys=str2ngrams_list(name, 4)
-# #         fivegram_querys=str2ngrams_list(name, 5)    
-#         word_simi=lcsubstring_length(question_list, name_words)
-# #         three_simi=lcsubstring_length(threegram_mens, threegram_querys)
-# #         four_simi=lcsubstring_length(fourgram_mens, fourgram_querys)
-# #         five_simi=lcsubstring_length(fivegram_mens, fivegram_querys)
-#         overall_simi=weights[0]*word_simi#+weights[1]*three_simi+weights[2]*four_simi+weights[3]*five_simi
-#         id2score[idd]=overall_simi
-#         print 'question_list:', question_list
-#         print 'name:', name
-#         print 'scores:', word_simi, overall_simi
-#     exit(0)
-    return [tup[0] for tup in sorted_map[:N]]
+    top_N_ids=[]
+    top_id2simi={}
+    for tup in sorted_map[:N]:
+        idd=tup[0]
+        top_N_ids.append(idd)
+        top_id2simi[idd]=tup[1]
+    return top_N_ids, top_id2simi
 def load_gold_head_ids(infile):
     readfile=codecs.open(infile, 'r', 'utf-8')        
     id_list=[]
@@ -805,7 +788,7 @@ def load_gold_head_ids(infile):
 def FB2M_SimpleQA_EntityLinking():
 #     id2names, word2ids, threegram2ids, fourgram2ids, fivegram2ids, mention2ids=    load_id2names_word2ids_3gram2ids_4gram2ids_5gram2ids_mention2ids()
     N=20
-    postag_imp={'NN':1, 'NNS':1, 'NNP':1, 'NNPS':1, 'FW':1, 'WP':0, 'WDT':0, 'JJ':0.5, 'CD':0.8}
+#     postag_imp={'NN':1, 'NNS':1, 'NNP':1, 'NNPS':1, 'FW':1, 'WP':0, 'WDT':0, 'JJ':0.5, 'CD':0.8}
     
     id2names, word2ids, mention2ids=    load_id2names_word2ids_mention2ids()
     path='/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/'
@@ -824,16 +807,17 @@ def FB2M_SimpleQA_EntityLinking():
         line_co=0
 #         example_size=len(gold_id_list)
         succ_size=0
+        top1=0
 #         sum_cand_size=0
         uncover_size=0
         for line in readfile:
             parts=line.strip().split()
             question_list=[]
-            question_pos_list=[]
+#             question_pos_list=[]
             for part in parts:
                 question_list.append(part.split('_')[0].lower())
-                postag=part.split('_')[1]
-                question_pos_list.append(postag_imp.get(postag, 0.0))
+#                 postag=part.split('_')[1]
+#                 question_pos_list.append(postag_imp.get(postag, 0.0))
 #             question_str=' '.join(question_list)
 #             raw_wordlabel=wordPOS_to_wordlabel(parts)
 #             refined_wordlabel=refine_wordPOS_wordlabel(parts, raw_wordlabel)
@@ -844,11 +828,11 @@ def FB2M_SimpleQA_EntityLinking():
 #             threegram_mens=str2ngrams_list(question_str, 3)
 #             fourgram_mens=str2ngrams_list(question_str, 4)
 #             fivegram_mens=str2ngrams_list(question_str, 5)
-            overall_ids=[]
+            overall_ids=set()
 #             word_id_set=set()
             for word in question_list:
-                word_ids=query2IDs(word, word2ids)
-                overall_ids+=word_ids
+                word_ids=  word2ids.get(word, set())  
+                overall_ids|=word_ids
 #                 word_id_set|=set(word_ids)
 #             three_id_set=set()
 #             for threegram in threegram_mens:
@@ -874,27 +858,21 @@ def FB2M_SimpleQA_EntityLinking():
             if len(overall_ids)==0:
                 uncover_size+=1
                 continue
-            sorted_id_list=ranking_ids_topN(question_list, question_pos_list, overall_ids, id2names, N)
-#             print gold_id_list[line_co], sorted_id_list
-#             exit(0)
-#             overall_strs=[id2names.get(idd) for idd in overall_ids]
-#             print line
-#             print men_cands
-#             print overall_ids
-#             print overall_strs
-#             print gold_id_list[line_co], overall_ids
-#             sum_cand_size+=len(sorted_id_list)
+            top_N_ids, top_id2simi=ranking_ids_topN(question_list, overall_ids, id2names, N)
             gold_mid=gold_id_list[line_co]
-            if gold_mid in sorted_id_list:
-                sorted_id_list.remove(gold_mid)
-                writefile.write('1\t'+gold_mid+'\t'+' '.join(sorted_id_list)+'\n')
+            if gold_mid in set(top_N_ids):
+                if gold_mid==top_N_ids[0]:
+                    top1+=1
+                top_N_ids.remove(gold_mid)
+                writefile.write('1\t'+gold_mid+'=='+str(top_id2simi.get(gold_mid))+'\t'+' '.join([idd+'=='+str(top_id2simi.get(idd)) for idd in top_N_ids])+'\n')
                 succ_size+=1
             else:
-                writefile.write('0\t'+' '.join(sorted_id_list)+'\n')
+                writefile.write('0\t'+' '.join([idd+'=='+str(top_id2simi.get(idd)) for idd in top_N_ids])+'\n')
+
             line_co+=1
             
             if line_co%100==0:
-                print line_co, 'succ rato:', succ_size*1.0/line_co, 'uncover_size:',uncover_size
+                print line_co, 'succ rato:', succ_size*1.0/line_co,'top1 rato:', top1*1.0/line_co, 'uncover_size:',uncover_size
 #             if line_co==6:
 #                 exit(0)
         readfile.close() 
