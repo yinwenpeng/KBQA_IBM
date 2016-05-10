@@ -4,6 +4,10 @@ import string
 import codecs
 import operator
 import numpy
+import heapq
+from operator import itemgetter
+import time
+from random import shuffle, sample
 
 def last_slash_pos(str):
     return str.rfind('/')
@@ -120,14 +124,37 @@ def str2ngrams_list(strr, n):
         return [''.join(char_list)]
     else:
         return [''.join(char_list[i:(i+n)]) for i in range(len(char_list)-n+1)]
-def    load_id2names_word2ids_mention2ids():
-                readfile=codecs.open('/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/freebase-subsets/freebase-FB2M-id2NameDes.txt', 'r', 'utf-8')
+def    load_id2names_id2des():
+    readfile=codecs.open('/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/freebase-subsets/freebase-FB2M-id2Name_20tokensDes.txt', 'r', 'utf-8')
+    id2names={}
+    id2des={}
+    count=0
+    for    line    in    readfile:
+        parts=line.strip().split('\t')
+        if len(parts)==3:
+
+            name=parts[1].strip().lower()
+            des=parts[2].strip()
+            if des=='<None>':
+                des=name
+            idd=parts[0].strip()
+            id2names[idd]=name
+            id2des[idd]=des.lower()
+                
+            count+=1
+#             if count%100==0:
+#                 print count
+    print count, 'names, des, loaded over'
+    readfile.close()
+    return id2names, id2des  
+def    load_id2names_word2ids():
+                readfile=codecs.open('/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/freebase-subsets/freebase-FB5M-id2NameDes.txt', 'r', 'utf-8')
                 id2names={}
                 word2ids={}
 #                 threegram2ids={}
 #                 fourgram2ids={}
 #                 fivegram2ids={}
-                mention2ids={}
+#                 mention2ids={}
                 count=0
                 for    line    in    readfile:
                                 parts=line.strip().split('\t')
@@ -149,9 +176,9 @@ def    load_id2names_word2ids_mention2ids():
 #                                         id_set_5.add(idd)
 #                                         fivegram2ids[fivegram]=id_set_5
                                     id2names[idd]=name
-                                    id_set=mention2ids.get(name, set())
-                                    id_set.add(idd)
-                                    mention2ids[name]=id_set
+#                                     id_set=mention2ids.get(name, set())
+#                                     id_set.add(idd)
+#                                     mention2ids[name]=id_set
                                     for word in name.split():
                                         MIDSet=word2ids.get(word, set())
                                         MIDSet.add(idd)
@@ -163,7 +190,7 @@ def    load_id2names_word2ids_mention2ids():
                                 #exit(0)
                 print count, 'names, loaded over'
                 readfile.close()
-                return id2names, word2ids , mention2ids 
+                return id2names, word2ids  
 def    load_id2names_word2ids_3gram2ids_4gram2ids_5gram2ids_mention2ids():
                 readfile=codecs.open('/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/freebase-subsets/freebase-FB2M-id2NameDes.txt', 'r', 'utf-8')
                 id2names={}
@@ -732,9 +759,10 @@ def lcsubstring_length(a, b):
 #             break
 #     posi_importance=(len_a-start)*1.0/len_a
     posi_importance=middle*1.0/len_a
-#     print left, right, question_pos_list, a, b
-#     postag_importance=numpy.mean(question_pos_list[left-1:right])
-    return l*1.0/len_b+l*0.6/len_a+0.1*posi_importance#+0.1*postag_importance
+    simi_1=l*1.0/len_b
+    simi_2=l*0.6/len_a
+    simi_3=0.1*posi_importance
+    return simi_1+simi_2+simi_3, simi_1, simi_2, simi_3 
                     
 
 def substringRato(list1, list2):
@@ -749,7 +777,10 @@ def substringRato(list1, list2):
 
 def ranking_ids_topN(question_list, interset_id_set_w345, id2names, N):
     id2score={}
-    weights=[0.4, 0.15, 0.2, 0.25]
+    id2simi_1={}
+    id2simi_2={}
+    id2simi_3={}
+#     weights=[0.4, 0.15, 0.2, 0.25]
     for idd in interset_id_set_w345:
         name=id2names.get(idd)
 #         print 'name:', name
@@ -757,25 +788,31 @@ def ranking_ids_topN(question_list, interset_id_set_w345, id2names, N):
 #         threegram_querys=str2ngrams_list(name, 3)
 #         fourgram_querys=str2ngrams_list(name, 4)
 #         fivegram_querys=str2ngrams_list(name, 5)    
-        word_simi=lcsubstring_length(question_list, name_words)
-#         three_simi=lcsubstring_length(threegram_mens, threegram_querys)
-#         four_simi=lcsubstring_length(fourgram_mens, fourgram_querys)
-#         five_simi=lcsubstring_length(fivegram_mens, fivegram_querys)
-        overall_simi=weights[0]*word_simi#+weights[1]*three_simi+weights[2]*four_simi+weights[3]*five_simi
+        overall_simi, simi_1, simi_2, simi_3=lcsubstring_length(question_list, name_words)
         id2score[idd]=overall_simi
+        id2simi_1[idd]=simi_1
+        id2simi_2[idd]=simi_2
+        id2simi_3[idd]=simi_3
 #         print 'question_list:', question_list
 #         print 'name:', name
 #         print 'scores:', word_simi, three_simi, four_simi, five_simi, overall_simi
 #         if idd=='m.04whkz5':
 #             exit(0)
-    sorted_map=sorted(id2score.items(), key=operator.itemgetter(1), reverse=True)
+    sorted_map=sorted(id2score.items(), key=operator.itemgetter(1), reverse=True)[:N]
+#     sorted_map=heapq.nlargest(N, id2score.items(), key=itemgetter(1))
     top_N_ids=[]
     top_id2simi={}
-    for tup in sorted_map[:N]:
+    top_id2simi_1={}
+    top_id2simi_2={}
+    top_id2simi_3={}
+    for tup in sorted_map:
         idd=tup[0]
         top_N_ids.append(idd)
         top_id2simi[idd]=tup[1]
-    return top_N_ids, top_id2simi
+        top_id2simi_1[idd]=id2simi_1.get(idd)
+        top_id2simi_2[idd]=id2simi_2.get(idd)
+        top_id2simi_3[idd]=id2simi_3.get(idd)
+    return top_N_ids, top_id2simi, top_id2simi_1, top_id2simi_2, top_id2simi_3, id2score, id2simi_1, id2simi_2, id2simi_3
 def load_gold_head_ids(infile):
     readfile=codecs.open(infile, 'r', 'utf-8')        
     id_list=[]
@@ -790,19 +827,19 @@ def FB2M_SimpleQA_EntityLinking():
     N=20
 #     postag_imp={'NN':1, 'NNS':1, 'NNP':1, 'NNPS':1, 'FW':1, 'WP':0, 'WDT':0, 'JJ':0.5, 'CD':0.8}
     
-    id2names, word2ids, mention2ids=    load_id2names_word2ids_mention2ids()
+    id2names, word2ids=    load_id2names_word2ids()
     path='/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/'
-    files=['annotated_fb_data_test.questions_combinedPOS.txt', 'annotated_fb_data_valid.questions_combinedPOS.txt', 'annotated_fb_data_train.questions_combinedPOS.txt']   
+    files=['annotated_fb_data_test.questions_stanfordTokenized.txt', 'annotated_fb_data_valid.questions_stanfordTokenized.txt', 'annotated_fb_data_train.questions_stanfordTokenized.txt']   
     q_files=['annotated_fb_data_test.txt', 'annotated_fb_data_valid.txt', 'annotated_fb_data_train.txt']
     for i in range(3):
         print i, '...'
         readfile=codecs.open(path+files[i], 'r', 'utf-8')
         if i==0:
-            writefile=codecs.open(path+'annotated_fb_data_test.entitylinking.top'+str(N)+'.txt', 'w', 'utf-8')
+            writefile=codecs.open(path+'annotated_fb_data_test.entitylinking.top'+str(N)+'.FB5M.txt', 'w', 'utf-8')
         elif i==1:
-            writefile=codecs.open(path+'annotated_fb_data_valid.entitylinking.top'+str(N)+'.txt', 'w', 'utf-8')
+            writefile=codecs.open(path+'annotated_fb_data_valid.entitylinking.top'+str(N)+'.FB5M.txt', 'w', 'utf-8')
         else:
-            writefile=codecs.open(path+'annotated_fb_data_train.entitylinking.top'+str(N)+'.txt', 'w', 'utf-8')
+            writefile=codecs.open(path+'annotated_fb_data_train.entitylinking.top'+str(N)+'.FB5M.txt', 'w', 'utf-8')
         gold_id_list=load_gold_head_ids(path+q_files[i])
         line_co=0
 #         example_size=len(gold_id_list)
@@ -810,12 +847,10 @@ def FB2M_SimpleQA_EntityLinking():
         top1=0
 #         sum_cand_size=0
         uncover_size=0
+        start_time = time.clock()
         for line in readfile:
-            parts=line.strip().split()
-            question_list=[]
-#             question_pos_list=[]
-            for part in parts:
-                question_list.append(part.split('_')[0].lower())
+            question=line.strip().lower()
+            question_list=question.split()
 #                 postag=part.split('_')[1]
 #                 question_pos_list.append(postag_imp.get(postag, 0.0))
 #             question_str=' '.join(question_list)
@@ -833,46 +868,40 @@ def FB2M_SimpleQA_EntityLinking():
             for word in question_list:
                 word_ids=  word2ids.get(word, set())  
                 overall_ids|=word_ids
-#                 word_id_set|=set(word_ids)
-#             three_id_set=set()
-#             for threegram in threegram_mens:
-#                 threegram_ids=query2IDs(threegram, threegram2ids)
-#                 overall_ids+=threegram_ids
-#                 three_id_set|=set(threegram_ids)
-#             four_id_set=set()
-#             for fourgram in fourgram_mens:
-#                 fourgram_ids=query2IDs(fourgram, fourgram2ids)
-#                 overall_ids+=fourgram_ids
-#                 four_id_set|=set(fourgram_ids)
-#             five_id_set=set()
-#             for fivegram in fivegram_mens:
-#                 fivegram_ids=query2IDs(fivegram, fivegram2ids)
-#                 overall_ids+=fivegram_ids
-#                 five_id_set|=set(fivegram_ids)
-#             interset_id_set_w345=word_id_set&three_id_set&four_id_set&five_id_set
-#             interset_id_set_w45=word_id_set&four_id_set&five_id_set
-#             interset_id_set_w5=word_id_set&five_id_set
-#             interset_id_set_w34=three_id_set&four_id_set
-            
-#             print 'overall_ids size:', len(overall_ids)
+
             if len(overall_ids)==0:
                 uncover_size+=1
                 continue
-            top_N_ids, top_id2simi=ranking_ids_topN(question_list, overall_ids, id2names, N)
+            top_N_ids, top_id2simi, top_id2simi_1, top_id2simi_2, top_id2simi_3, all_id2score, all_id2simi_1, all_id2simi_2, all_id2simi_3=ranking_ids_topN(question_list, overall_ids, id2names, N)
             gold_mid=gold_id_list[line_co]
-            if gold_mid in set(top_N_ids):
-                if gold_mid==top_N_ids[0]:
-                    top1+=1
-                top_N_ids.remove(gold_mid)
-                writefile.write('1\t'+gold_mid+'=='+str(top_id2simi.get(gold_mid))+'\t'+' '.join([idd+'=='+str(top_id2simi.get(idd)) for idd in top_N_ids])+'\n')
-                succ_size+=1
+            if i==0 or i==1:
+            
+                if gold_mid in set(top_N_ids):
+                    if gold_mid==top_N_ids[0]:
+                        top1+=1
+                    top_N_ids.remove(gold_mid)
+                    writefile.write('1\t'+gold_mid+'=='+str(top_id2simi.get(gold_mid))+'=='+str(top_id2simi_1.get(gold_mid))+'=='+str(top_id2simi_2.get(gold_mid))+'=='+str(top_id2simi_3.get(gold_mid))\
+                                    +'\t'+'\t'.join([idd+'=='+str(top_id2simi.get(idd))+'=='+str(top_id2simi_1.get(idd))+'=='+str(top_id2simi_2.get(idd))+'=='+str(top_id2simi_3.get(idd)) for idd in top_N_ids])+'\t'+question+'\n')
+                    succ_size+=1
+                else:
+                    writefile.write('0\t'+'\t'.join([idd+'=='+str(top_id2simi.get(idd))+'=='+str(top_id2simi_1.get(idd))+'=='+str(top_id2simi_2.get(idd))+'=='+str(top_id2simi_3.get(idd)) for idd in top_N_ids])+'\t'+question+'\n')
             else:
-                writefile.write('0\t'+' '.join([idd+'=='+str(top_id2simi.get(idd)) for idd in top_N_ids])+'\n')
-
+                if gold_mid in set(top_N_ids):
+                    succ_size+=1
+                    if gold_mid==top_N_ids[0]:
+                        top1+=1
+                    top_N_ids.remove(gold_mid)
+                else:
+                    top_N_ids=top_N_ids[:-1]
+                    
+                writefile.write(gold_mid+'=='+str(all_id2score.get(gold_mid))+'=='+str(all_id2simi_1.get(gold_mid))+'=='+str(all_id2simi_2.get(gold_mid))+'=='+str(all_id2simi_3.get(gold_mid))\
+                                    +'\t'+'\t'.join([idd+'=='+str(top_id2simi.get(idd))+'=='+str(top_id2simi_1.get(idd))+'=='+str(top_id2simi_2.get(idd))+'=='+str(top_id2simi_3.get(idd)) for idd in top_N_ids])+'\t'+question+'\n')
+                                 
             line_co+=1
             
             if line_co%100==0:
-                print line_co, 'succ rato:', succ_size*1.0/line_co,'top1 rato:', top1*1.0/line_co, 'uncover_size:',uncover_size
+                print line_co, 'succ rato:', succ_size*1.0/line_co,'top1 rato:', top1*1.0/line_co, 'uncover_size:',uncover_size,         'uses ', (time.clock()-start_time)/60.0, 'min'
+
 #             if line_co==6:
 #                 exit(0)
         readfile.close() 
@@ -881,7 +910,7 @@ def FB2M_SimpleQA_EntityLinking():
         
 def FB2M_id2str_id2des():
     #first load how many ids in FB2M
-    readfile=open('/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/freebase-subsets/freebase-FB2M-ungrouped.txt', 'r')
+    readfile=open('/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/freebase-subsets/freebase-FB5M-ungrouped.txt', 'r')
     FB_ids=set()
     for line in readfile:
         parts=line.strip().split()
@@ -891,9 +920,9 @@ def FB2M_id2str_id2des():
         FB_ids.add(head)
         FB_ids.add(tail)       
     readfile.close()
-    print 'freebase-FB2M-ungrouped.txt loaded over'
+    print 'freebase-FB5M-ungrouped.txt loaded over'
     readfile=gzip.open('/mounts/data/proj/wenpeng/Dataset/freebase/id_to_name_des_types.txt.gz', 'r')   
-    writefile=open('/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/freebase-subsets/freebase-FB2M-id2NameDes.txt', 'w')    
+    writefile=open('/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/freebase-subsets/freebase-FB5M-id2NameDes.txt', 'w')    
     for line in readfile:
         parts=line.strip().split('\t')
         id=parts[0]
@@ -902,10 +931,35 @@ def FB2M_id2str_id2des():
         if id in  FB_ids:
             writefile.write(id+'\t'+' '.join(nltk.word_tokenize(name.decode('utf-8'))).encode('utf-8')+'\t'+des+'\n')
     readfile.close()
-    writefile.close()   
+    writefile.close()  
+    print  'FB5M_id2str_id2des, finished'
+
+def tokenize_id2NameDes():
+    readfile=codecs.open('/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/freebase-subsets/freebase-FB2M-id2NameDes.txt', 'r', 'utf-8')
+    writefile=codecs.open('/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/freebase-subsets/freebase-FB2M-id2Name_20tokensDes.txt', 'w', 'utf-8')    
+    empty_line=0
+    line_co=0
+    for line in readfile:
+#         line_co+=1
+#         print line_co        
+        parts=line.strip().split('\t')
+        if len(parts)!=3:
+            print line
+            empty_line+=1
+            continue
+        id=parts[0]
+        name=parts[1]
+        des=parts[2]
+        if des!='<None>':
+            des=' '.join(nltk.word_tokenize(des)[:20])
+        writefile.write(id+'\t'+name+'\t'+des+'\n')
+
+    readfile.close()
+    writefile.close()  
+    print  'tokenized FB2M_id2str_id2des, finished, empty line:', empty_line
 
 def HowMany_GroundTruthMID_HaveName():
-    id2names, word2ids, mention2ids=    load_id2names_word2ids_mention2ids()
+    id2names, word2ids=    load_id2names_word2ids()
     path='/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/'
     files=['annotated_fb_data_train', 'annotated_fb_data_test', 'annotated_fb_data_valid']   
     fail_no=0   
@@ -925,7 +979,372 @@ def HowMany_GroundTruthMID_HaveName():
         print 'finished, fail:', fail_no, 'all no:', all_co   
         fail_no=0
         all_co=0   
+
+def Remove_EntityLinkingFailed_TestValid():
+    path='/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/'
+    test_valid=['annotated_fb_data_test.entitylinking.top20.txt', 'annotated_fb_data_valid.entitylinking.top20.txt']
+     
+    for i in range(2):
+        readfile=codecs.open(path+test_valid[i], 'r', 'utf-8')
+        if i==0:
+            writefile=codecs.open(path+'annotated_fb_data_test.entitylinking.top20_succSet.txt', 'w', 'utf-8')
+        else:
+            writefile=codecs.open(path+'annotated_fb_data_valid.entitylinking.top20_succSet.txt', 'w', 'utf-8')
+        for line in readfile:
+            parts=line.strip().split('\t')
+            if parts[0]=='1':
+                writefile.write('\t'.join(parts[1:])+'\n')
+        writefile.close()
+        readfile.close()
+        print 'remove failed over'
+
+def filter_test_valid_by_unentitylinked():
+    path='/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/'
+    test_valid=['annotated_fb_data_test.entitylinking.top20.txt', 'annotated_fb_data_valid.entitylinking.top20.txt']
+    raw_test_valid=['annotated_fb_data_test.txt', 'annotated_fb_data_valid.txt']
+    for i in range(2):
+        label_list=[]
+        readfile=codecs.open(path+test_valid[i], 'r', 'utf-8')
+        for line in readfile:
+            parts=line.strip().split('\t')
+            if parts[0]=='1':
+                label_list.append(1)
+            else:
+                label_list.append(0)
+        readfile.close()
+        readfile=codecs.open(path+raw_test_valid[i], 'r', 'utf-8')
+        if i==0:
+            writefile=codecs.open(path+'annotated_fb_data_test_succSet.txt', 'w', 'utf-8')
+        else:
+            writefile=codecs.open(path+'annotated_fb_data_valid_succSet.txt', 'w', 'utf-8')
+        
+        count=0
+        for line in readfile:
+            if label_list[count]==1:
+                writefile.write(line.strip()+'\n')
+            count+=1
+        readfile.close()
+        writefile.close()
+        print 'remove raw test_valid failed over'    
+
+def load_id2tuples():
+    read5M=codecs.open('/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/freebase-subsets/freebase-FB2M-ungrouped.txt', 'r', 'utf-8')
+    id2tuples={}
+    count=0
+    for line in read5M:
+        parts=line.strip().split()
+        idd='m.'+parts[0][last_slash_pos(parts[0])+1:]
+        relation=parts[1][last_slash_pos(parts[1])+1:]
+        
+        tup=(idd, relation)
+        id_tup=id2tuples.get(idd)
+        if id_tup is None:
+            id_tup=set()
+        id_tup.add(tup)
+        id2tuples[idd]=id_tup
+
+        count+=1
+    read5M.close()
+    print 'load_id2tuples finished' 
+    return id2tuples 
+def load_groundtruth_tuple(infile):
+    readfile=codecs.open(infile, 'r', 'utf-8')
+    tuple_list=[]
+    for line in readfile:
+        parts=line.strip().split('\t')
+        idd='m.'+parts[0][last_slash_pos(parts[0])+1:]
+        relation=parts[1][last_slash_pos(parts[1])+1:]  
+        tuple_list.append((idd,relation))
+    readfile.close()
+    return tuple_list      
+  
+def EntityLinkingResult_into_TrainModelInput_TestValid():
+    path='/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/'
+    id2name, id2des=load_id2names_id2des()
+    id2tuples=load_id2tuples()
+#     print 'id2tuples.get:', id2tuples.get('m.0c1rnhp')
+#     exit(0)
+ 
+    test_valid=['annotated_fb_data_test.entitylinking.top20_succSet.txt', 'annotated_fb_data_valid.entitylinking.top20_succSet.txt']
+    raw_test_valid=['annotated_fb_data_test_succSet.txt', 'annotated_fb_data_valid_succSet.txt']   
+    for i in range(2):
+        nega_size=0
+        readfile=codecs.open(path+test_valid[i], 'r', 'utf-8')
+        ground_tuple_list=load_groundtruth_tuple(path+raw_test_valid[i])
+        if i==0:
+            writefile=codecs.open(path+'annotated_fb_data_test.entitylinking.top20_succSet_asInput.txt', 'w', 'utf-8')  
+        else:
+            writefile=codecs.open(path+'annotated_fb_data_valid.entitylinking.top20_succSet_asInput.txt', 'w', 'utf-8')
+        count=0
+        for line in readfile:
+            neg_size_line=0
+            parts=line.strip().split()
+#             print 'len(parts):', len(parts)
+            entity_parts=parts[:20]
+            question=parts[20:]
+            if parts[20].find('==')>=0:
+                print 'format error'
+                exit(0)
+            ground_tuple=ground_tuple_list[count]
+#             nega_tuples=set()
+            tuple_write=[]
+            name_write=[]
+            des_write=[]
+            men_Q_write=[]
+            for p in range(20):
+                part=entity_parts[p]
+#             for part in parts[:-1]:
+                tokens=part.strip().split('==')
+                mid=tokens[0]
+#                 print 'mid:', mid
+                s1=tokens[1]
+                s2=tokens[2]
+                s3=tokens[3]
+                s4=tokens[4]
+                mid_related_tuples=id2tuples.get(mid)
+#                 print mid, mid_related_tuples, len(mid_related_tuples)
+                if mid_related_tuples is None:
+                    continue
+#                 neg_size_line+=len(mid_related_tuples)
+                mid_name_str=id2name.get(mid)
+                mid_name=mid_name_str.split()
+                mid_des=id2des.get(mid)
+                if p==0:
+                    tuple_write.append('=='.join(ground_tuple)+'=='+'=='.join([s1,s2,s3,s4]))
+                    name_write.append(mid_name_str)
+                    des_write.append(mid_des)
+                    men_Q_write.append('=='.join(list(mention_detection_given_questionAndEntity(question, mid_name))))
+                    if ground_tuple in mid_related_tuples:
+                        mid_related_tuples.remove(ground_tuple)
+                
+                for related_tup in mid_related_tuples:
+                    tuple_write.append('=='.join(related_tup)+'=='+'=='.join([s1,s2,s3,s4]))
+                    name_write.append(mid_name_str)
+                    des_write.append(mid_des)
+                    men_Q_write.append('=='.join(list(mention_detection_given_questionAndEntity(question, mid_name))))
+            
+            neg_size_line=len(tuple_write)
+            nega_size+=neg_size_line
+            #shuffle
+#             if len(tuple_write)!=len(des_write) or  len(tuple_write)!=len(name_write) or len(tuple_write)!=len(men_Q_write) or len(tuple_write)!=neg_size_line:
+#                 print 'tuple_write, des_write, men_Q_write, size not equal'
+#                 print 'len(tuple_write):', len(tuple_write)
+#                 print 'len(name_write):', len(name_write)
+#                 print 'len(des_write):', len(des_write)
+#                 print 'len(men_Q_write):', len(men_Q_write)
+#                 print 'neg_size_line:', neg_size_line
+#                 exit(0)
+#             print 'neg_size_line:', neg_size_line
+            index_list=range(1, neg_size_line)
+            shuffle(index_list)
+#             print 'index_list:', index_list
+            indices=[0]+index_list
+            writefile.write(str(neg_size_line)+'\t')
+            writefile.write('\t'.join([tuple_write[ind] for ind in indices])+'\t')
+            writefile.write('\t'.join([name_write[ind] for ind in indices])+'\t')
+            writefile.write('\t'.join([des_write[ind] for ind in indices])+'\t')
+            writefile.write('\t'.join([men_Q_write[ind] for ind in indices])+'\n')
+            count+=1
+        readfile.close()
+        writefile.close()
+        print i, 'finished'
+                
+
+def EntityLinkingResult_into_TrainModelInput_Train():
+    path='/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/'
+    id2name, id2des=load_id2names_id2des()
+    id2tuples=load_id2tuples()
+    max_triples=100
+    train='annotated_fb_data_train.entitylinking.top20.txt'
+    raw_train='annotated_fb_data_train.txt'  
+
+    readfile=codecs.open(path+train, 'r', 'utf-8')
+    ground_tuple_list=load_groundtruth_tuple(path+raw_train)
+    ground_tuple_list.pop(31858)
+    writefile=codecs.open(path+'annotated_fb_data_train.entitylinking.top20_succSet_asInput.txt', 'w', 'utf-8')  
+
+    count=0
+    for line in readfile:
+        neg_size_line=0
+        parts=line.strip().split()
+#             print 'len(parts):', len(parts)
+        entity_parts=parts[:20]
+        question=parts[20:]
+        if parts[20].find('==')>=0:
+            print 'format error'
+            exit(0)
+        ground_tuple=ground_tuple_list[count]
+#             nega_tuples=set()
+        tuple_write=[]
+        name_write=[]
+        des_write=[]
+        men_Q_write=[]
+        for p in range(20):
+            part=entity_parts[p]
+#             for part in parts[:-1]:
+            tokens=part.strip().split('==')
+            mid=tokens[0]
+#                 print 'mid:', mid
+            s1=tokens[1]
+            s2=tokens[2]
+            s3=tokens[3]
+            s4=tokens[4]
+            mid_related_tuples=id2tuples.get(mid)
+#                 print mid, mid_related_tuples, len(mid_related_tuples)
+            if mid_related_tuples is None:
+                continue
+#                 neg_size_line+=len(mid_related_tuples)
+            mid_name_str=id2name.get(mid)
+            if mid_name_str is None:
+                continue
+            mid_name=mid_name_str.split()
+            mid_des=id2des.get(mid)
+            if p==0:
+                tuple_write.append('=='.join(ground_tuple)+'=='+'=='.join([s1,s2,s3,s4]))
+                name_write.append(mid_name_str)
+                des_write.append(mid_des)
+                men_Q_write.append('=='.join(list(mention_detection_given_questionAndEntity(question, mid_name))))
+                if ground_tuple in mid_related_tuples:
+                    mid_related_tuples.remove(ground_tuple)
+            
+            for related_tup in mid_related_tuples:
+                tuple_write.append('=='.join(related_tup)+'=='+'=='.join([s1,s2,s3,s4]))
+                name_write.append(mid_name_str)
+                des_write.append(mid_des)
+                men_Q_write.append('=='.join(list(mention_detection_given_questionAndEntity(question, mid_name))))
+        
+        neg_size_line=len(tuple_write)
+        index_list=range(1, neg_size_line)
+        if neg_size_line<max_triples:
+            times=(max_triples-1)/(neg_size_line-1)
+            remain=(max_triples-1)%(neg_size_line-1)
+            sampled_list=sample(set(index_list), remain)
+            index_list=index_list*times+sampled_list
+        elif neg_size_line>max_triples:
+            index_list=index_list[:max_triples-1]
+#             nega_size+=neg_size_line
+        #shuffle
+#             if len(tuple_write)!=len(des_write) or  len(tuple_write)!=len(name_write) or len(tuple_write)!=len(men_Q_write) or len(tuple_write)!=neg_size_line:
+#                 print 'tuple_write, des_write, men_Q_write, size not equal'
+#                 print 'len(tuple_write):', len(tuple_write)
+#                 print 'len(name_write):', len(name_write)
+#                 print 'len(des_write):', len(des_write)
+#                 print 'len(men_Q_write):', len(men_Q_write)
+#                 print 'neg_size_line:', neg_size_line
+#                 exit(0)
+#             print 'neg_size_line:', neg_size_line
+        shuffle(index_list)
+#             print 'index_list:', index_list
+        indices=[0]+index_list
+        if len(indices)!=max_triples:
+            print 'len(indices)!=max_triples'
+            exit(0)
+        writefile.write(str(max_triples)+'\t')
+        writefile.write('\t'.join([tuple_write[ind] for ind in indices])+'\t')
+        writefile.write('\t'.join([name_write[ind] for ind in indices])+'\t')
+        writefile.write('\t'.join([des_write[ind] for ind in indices])+'\t')
+        writefile.write('\t'.join([men_Q_write[ind] for ind in indices])+'\n')
+        count+=1
+    readfile.close()
+    writefile.close()
+    print 'finished'
+                
+def mention_detection_given_questionAndEntity_characterLevel(a, b):
+#     print 'a:', a
+#     print 'b:', b
+    len_a=len(a)
+    len_b=len(b)
+    a_label=[0]*len_a
+    b_label=[0]*len_b
+    table=[[0]*(len_b+1) for _ in xrange(len_a+1)]
+    l=0
+    for i, ca in enumerate(a,1):
+        for j, cb in enumerate(b,1):
+            if ca==cb:
+                table[i][j]=table[i-1][j-1]+1
+                if table[i][j]>l:
+                    l=table[i][j]
+                    a_label[i-1]=1
+                    b_label[j-1]=1
     
+    if l==0:
+        return ''.join(b), ''.join(a)
+    
+    a_last_1_posi=len_a-1
+    while a_label[a_last_1_posi]!=1:
+        a_last_1_posi-=1
+    a_first_1_posi=a_last_1_posi-l+1
+    
+    
+    while a[a_last_1_posi]!=' ':
+        a_last_1_posi+=1
+        if a_last_1_posi==len_a:
+            break
+    while a[a_first_1_posi]!=' ':
+        a_first_1_posi-=1
+        if a_first_1_posi==0:
+            break
+    
+    
+    
+#     b_last_1_posi=len_b-1
+#     while b_label[b_last_1_posi]!=1:
+#         b_last_1_posi-=1
+#     b_first_1_posi=b_last_1_posi-l+1    
+#     print a_label, b_label
+
+
+#     print a_last_1_posi, (len_b-b_last_1_posi)
+#     a_last_1_posi+=(len_b-b_last_1_posi-1)
+#     print a_last_1_posi
+    mention=''.join(a[a_first_1_posi+1:a_last_1_posi]).strip()
+    question_minus=''.join(a[:a_first_1_posi]+[' <e> ']+a[a_last_1_posi:])
+    
+    return mention, question_minus           
+            
+def mention_detection_given_questionAndEntity(a, b):
+    len_a=len(a)
+    len_b=len(b)
+    a_label=[0]*len_a
+    b_label=[0]*len_b
+    table=[[0]*(len_b+1) for _ in xrange(len_a+1)]
+    l=0
+    for i, ca in enumerate(a,1):
+        for j, cb in enumerate(b,1):
+            if ca==cb:
+                table[i][j]=table[i-1][j-1]+1
+                if table[i][j]>l:
+                    l=table[i][j]
+                    a_label[i-1]=1
+                    b_label[j-1]=1
+    
+    if l==0:
+        men, q_=mention_detection_given_questionAndEntity_characterLevel(list(' '.join(a)), list(' '.join(b)))
+        return men, q_
+    
+    a_last_1_posi=len_a-1
+    while a_label[a_last_1_posi]!=1:
+        a_last_1_posi-=1
+    a_first_1_posi=a_last_1_posi-l+1
+    
+    b_last_1_posi=len_b-1
+    while b_label[b_last_1_posi]!=1:
+        b_last_1_posi-=1
+    b_first_1_posi=b_last_1_posi-l+1    
+#     print a_label, b_label
+    a_first_1_posi=max(0, a_first_1_posi-b_first_1_posi)
+#     print a_last_1_posi, (len_b-b_last_1_posi)
+    a_last_1_posi+=(len_b-b_last_1_posi-1)
+#     print a_last_1_posi
+    mention=' '.join(a[a_first_1_posi:a_last_1_posi+1])
+    question_minus=' '.join(a[:a_first_1_posi]+['<e>']+a[a_last_1_posi+1:])
+    
+    return mention, question_minus
+                
+            
+            
+    
+   
 if __name__ == '__main__':
 #     entity_description_tokenize()
 #     extract_related_triples()
@@ -944,16 +1363,28 @@ if __name__ == '__main__':
 #     nltk_POSTagging()
 #     combine_three_POStags()
 #     FB2M_id2str_id2des()
+#     tokenize_id2NameDes()
 #     HowMany_GroundTruthMID_HaveName()
-    FB2M_SimpleQA_EntityLinking()
-#     a=[1,2,3,4,12,5,2,3,7,3]
-#     b=[2,3,4,5,9,0]
-#     r1, r2=lcsubstring_length(a,b)
-#     print r1, r2
+#     FB2M_SimpleQA_EntityLinking()
+#     Remove_EntityLinkingFailed_TestValid()
+#     filter_test_valid_by_unentitylinked()
+#     EntityLinkingResult_into_TrainModelInput_TestValid()
+    EntityLinkingResult_into_TrainModelInput_Train()
+# 
+#     a=list('what time zone is marrakech in ?')
+#     b=list('marrakesh')
+#     print a, b
+#     c=list(mention_detection_given_questionAndEntity_characterLevel(a,b))
+#     print c
+# 
+# 
+#     a="what 's akbar tandjung 's ethinicity".split()
+#     b="what is new".split()
+#     print a, b
+#     c=list(mention_detection_given_questionAndEntity(a,b))
+#     print c
 
 
-
-    
     
     
     
