@@ -317,8 +317,162 @@ def load_train_test(triple_files, question_files, max_char_len, max_des_len, max
     print 'initialized word embs written over'
     return result, len(word2id), len(char2id)
     
-      
-def load_train(trainfile, max_char_len, max_des_len, max_relation_len, max_Q_len, train_size):
+def load_test_or_valid(testfile, char2id, word2id, max_char_len, max_des_len, max_relation_len, max_Q_len, test_size):
+
+    length_per_example=[]
+    
+    train_file_triples=codecs.open(path+testfile, 'r', 'utf-8')
+#         train_file_mentions=codecs.open(path+question_files[i], 'r', 'utf-8')
+    pos_entity_char=[]
+    entity_char_lengths=[]
+    entity_scores=[]
+    
+    pos_entity_des=[]
+    entity_des_lengths=[]
+    
+    relations=[]
+    relation_lengths=[]
+    
+    mention_char_ids=[]
+    mention_char_lens=[]
+    remainQ_word_ids=[]
+    remainQ_word_lens=[]
+
+    line_co=0
+    for line in train_file_triples:
+        parts=line.strip().split('\t')
+        supposed_triple_size=int(parts[0])
+        length_per_example.append(supposed_triple_size)
+        parts=parts[1:]
+        if len(parts)!=supposed_triple_size*4:
+            print 'row length problem:', len(parts)
+            exit(0)
+        triples=parts[:supposed_triple_size]
+        names=parts[supposed_triple_size: supposed_triple_size*2]
+        deses=parts[supposed_triple_size*2:supposed_triple_size*3]
+        men_Qs=parts[supposed_triple_size*3:]
+        #first load relations and entity scores
+        r_word_ids=[]
+        r_word_lens=[]        
+        entity_score=[]
+        for triple in triples:
+#             print triple
+            tri_parts=triple.strip().split('==')
+            score=tri_parts[2]
+            if score=='None':
+                score='0.0'
+            entity_score.append(float(score))
+            r_words=tri_parts[1].strip().lower().split('_')[:max_relation_len]
+            len_temp=len(r_words)
+            left=(max_relation_len-len_temp)/2
+            right=max_relation_len-left-len_temp
+            r_word_lens+=[left, len_temp, right]
+            r_word_ids+=[0]*left
+            for r_word in r_words:
+                word_id=word2id.get(r_word)
+                if word_id is None:
+                    word_id=len(word2id)+1 # start from 1
+                    word2id[r_word]=word_id
+                r_word_ids.append(word_id)
+            r_word_ids+=[0]*right            
+            
+        relations.append(r_word_ids)
+        relation_lengths.append(r_word_lens)
+        entity_scores.append(entity_score)
+        
+        #names       
+        char_ids=[] # first max_char_len are always positive
+        char_lens=[]
+        
+        for name in names:
+            h=list(name.strip().lower())[:max_char_len]
+            
+            len_temp=len(h)
+            left=(max_char_len-len_temp)/2
+            right=max_char_len-left-len_temp
+            char_lens+=[left, len_temp, right]
+            char_ids+=[0]*left
+            for h_char in h:
+                char_id=char2id.get(h_char)
+                if char_id is None:
+                    char_id=len(char2id)+1  #start from 1
+                    char2id[h_char]=char_id
+                char_ids.append(char_id)
+            char_ids+=[0]*right            
+        entity_char_lengths.append(char_lens)
+        pos_entity_char.append(char_ids)
+        
+        #des
+        des_word_lens=[]
+        des_ids=[]
+        for des in deses:
+            truncate_des=des.strip().lower().split()[:max_des_len]#nltk.word_tokenize(des.strip().lower().decode('utf-8'))[:20]
+            len_temp=len(truncate_des)
+            left=(max_des_len-len_temp)/2
+            right=max_des_len-left-len_temp
+            des_word_lens+=[left, len_temp, right]
+            des_ids+=[0]*left
+            for des_word in truncate_des:
+                id=word2id.get(des_word)
+                if id is None:
+                    id=len(word2id)+1
+                    word2id[des_word]=id
+                des_ids.append(id)
+            des_ids+=[0]*right
+        pos_entity_des.append(des_ids)   
+        entity_des_lengths.append(des_word_lens)
+                     
+        #men_Q
+
+        m_char_ids=[]
+        m_char_len=[]
+        Q_word_ids=[]
+        Q_word_len=[]
+        for men_q in men_Qs:
+            parts=men_q.strip().split('==')
+            m=list(parts[0])[:max_char_len]
+            
+            len_temp=len(m)
+            left=(max_char_len-len_temp)/2
+            right=max_char_len-left-len_temp
+            m_char_len+=[left, len_temp, right]
+            m_char_ids+=[0]*left
+            for m_char in m:
+                char_id=char2id.get(m_char)
+                if char_id is None:
+                    char_id=len(char2id)+1
+                    char2id[m_char]=char_id
+                m_char_ids.append(char_id)
+            m_char_ids+=[0]*right    
+         
+                    
+            Q_words=parts[1].strip().lower().split()[:max_Q_len]
+            len_temp=len(Q_words)
+            left=(max_Q_len-len_temp)/2
+            right=max_Q_len-left-len_temp
+            Q_word_len+=[left, len_temp, right]
+            Q_word_ids+=[0]*left
+            for Q_word in Q_words:
+                word_id=word2id.get(Q_word)
+                if word_id is None:
+                    word_id=len(word2id)+1
+                    word2id[Q_word]=word_id
+                Q_word_ids.append(word_id)
+            Q_word_ids+=[0]*right    
+        remainQ_word_ids.append(Q_word_ids)
+        remainQ_word_lens.append(Q_word_len)
+        mention_char_ids.append(m_char_ids) 
+        mention_char_lens.append(m_char_len)
+        
+        line_co+=1
+        if line_co==test_size:
+            break       
+    result=(pos_entity_char, pos_entity_des, relations, entity_char_lengths, entity_des_lengths, relation_lengths, mention_char_ids, remainQ_word_ids, mention_char_lens, remainQ_word_lens, entity_scores)
+    
+    print 'load', line_co, 'test examples over'
+
+    return result, length_per_example, word2id, char2id        
+def load_train(trainfile, testfile, max_char_len, max_des_len, max_relation_len, max_Q_len, train_size, test_size):
     #load char_vocab, word_vocab
     char2id={}
     word2id={}
@@ -473,6 +627,8 @@ def load_train(trainfile, max_char_len, max_des_len, max_relation_len, max_Q_len
     
     print 'load', line_co, 'training examples over'
 
+    result_test, length_per_example_test, word2id, char2id  = load_test_or_valid(testfile, char2id, word2id, max_char_len, max_des_len, max_relation_len, max_Q_len, test_size)
+
     read_char_file=codecs.open(path+'char_ids.txt', 'w', 'utf-8')
     for char, id in char2id.iteritems():
         read_char_file.write(char+'\t'+str(id)+'\n')
@@ -507,7 +663,7 @@ def load_train(trainfile, max_char_len, max_des_len, max_relation_len, max_Q_len
         write_word_emb.write(str(id)+'\t'+' '.join(map(str, emb))+'\n')
     write_word_emb.close()
     print 'initialized word embs written over'
-    return result, len(word2id), len(char2id)   
+    return result, result_test, length_per_example_test, len(word2id), len(char2id)   
     
     
 if __name__ == '__main__':

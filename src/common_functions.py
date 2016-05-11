@@ -13,6 +13,9 @@ def pythonList_into_theanoIntMatrix(list):
     theano_list=theano.shared(numpy.asarray(list, dtype=theano.config.floatX), borrow=True)
     return T.cast(theano_list, 'int64')
 
+def pythonList_into_theanoFloatMatrix(list):
+    theano_list=theano.shared(numpy.asarray(list, dtype=theano.config.floatX), borrow=True)
+    return theano_list
 def norm_matrix(M):
     len=T.sqrt(T.sum(M**2, axis=1)).reshape((M.shape[0],1))
     return M/len

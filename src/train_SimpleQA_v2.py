@@ -19,7 +19,7 @@ from theano.tensor.signal import downsample
 from theano.tensor.nnet import conv
 from load_data import load_train, load_word2vec_to_init#, load_mts_wikiQA, load_wmf_wikiQA
 from word2embeddings.nn.util import zero_value, random_value_normal
-from common_functions import Conv_with_input_para, Average_Pooling_for_Top, create_conv_para, pythonList_into_theanoIntMatrix, Max_Pooling, cosine
+from common_functions import Conv_with_input_para, Average_Pooling_for_Top, create_conv_para, pythonList_into_theanoIntMatrix, Max_Pooling, cosine, pythonList_into_theanoFloatMatrix
 from random import shuffle
 
 from sklearn import svm
@@ -59,20 +59,23 @@ Doesnt work:
 def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nkerns=4, batch_size=1, window_width=3,
                     emb_size=50, char_emb_size=4, hidden_size=200,
                     margin=0.5, L2_weight=0.0003, update_freq=1, norm_threshold=5.0, max_truncate=40, 
-                    max_char_len=40, max_des_len=20, max_relation_len=5, max_Q_len=30, train_neg_size=6, test_neg_size=5, valid_neg_size=5, neg_all=100, train_size=100):
+                    max_char_len=40, max_des_len=20, max_relation_len=5, max_Q_len=30, train_neg_size=6, 
+                    test_neg_size=5, valid_neg_size=5, neg_all=100, train_size=50, test_size=20):
 #     maxSentLength=max_truncate+2*(window_width-1)
     model_options = locals().copy()
     print "model options", model_options
     rootPath='/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/'
-    triple_files=['annotated_fb_data_train_PNQ_'+str(train_neg_size)+'nega_str&des.txt', 'annotated_fb_data_valid_PNQ_'+str(valid_neg_size)+'nega_str&des.txt', 'annotated_fb_data_test_PNQ_'+str(test_neg_size)+'nega_str&des.txt']
-    question_files=['annotated_fb_data_train_mention_remainQ.txt', 'annotated_fb_data_valid_mention_remainQ.txt', 'annotated_fb_data_test_mention_remainQ.txt']
-    
+    triple_files=['annotated_fb_data_train.entitylinking.top20_succSet_asInput.txt', 'annotated_fb_data_test.entitylinking.top20_succSet_asInput.txt']
+
     rng = numpy.random.RandomState(23455)
-    datasets, vocab_size, char_size=load_train('annotated_fb_data_train.entitylinking.top20_succSet_asInput.txt', max_char_len, max_des_len, max_relation_len, max_Q_len, train_size)#max_char_len, max_des_len, max_relation_len, max_Q_len
+    datasets, datasets_test, length_per_example_test, vocab_size, char_size=load_train(triple_files[0], triple_files[1], max_char_len, max_des_len, max_relation_len, max_Q_len, train_size, test_size)#max_char_len, max_des_len, max_relation_len, max_Q_len
+
+    
     print 'vocab_size:', vocab_size, 'char_size:', char_size
+
     train_data=datasets
 #     valid_data=datasets[1]
-#     test_data=datasets[2]
+    test_data=datasets_test
 #     result=(pos_entity_char, pos_entity_des, relations, entity_char_lengths, entity_des_lengths, relation_lengths, mention_char_ids, remainQ_word_ids, mention_char_lens, remainQ_word_lens, entity_scores)
 #     
     train_pos_entity_char=train_data[0]
@@ -85,18 +88,19 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
     train_remainQ_word_ids=train_data[7]
     train_mention_char_lens=train_data[8]
     train_remainQ_word_len=train_data[9]
-    entity_scores=train_data[10]
+    train_entity_scores=train_data[10]
 
-#     valid_pos_entity_char=valid_data[0]
-#     valid_pos_entity_des=valid_data[1]
-#     valid_relations=valid_data[2]
-#     valid_entity_char_lengths=valid_data[3]
-#     valid_entity_des_lengths=valid_data[4]
-#     valid_relation_lengths=valid_data[5]
-#     valid_mention_char_ids=valid_data[6]
-#     valid_remainQ_word_ids=valid_data[7]
-#     valid_mention_char_lens=valid_data[8]
-#     valid_remainQ_word_len=valid_data[9]
+    test_pos_entity_char=test_data[0]
+    test_pos_entity_des=test_data[1]
+    test_relations=test_data[2]
+    test_entity_char_lengths=test_data[3]
+    test_entity_des_lengths=test_data[4]
+    test_relation_lengths=test_data[5]
+    test_mention_char_ids=test_data[6]
+    test_remainQ_word_ids=test_data[7]
+    test_mention_char_lens=test_data[8]
+    test_remainQ_word_len=test_data[9]
+    test_entity_scores=test_data[10]
 # 
 #     test_pos_entity_char=test_data[0]       #matrix, each row for line example, all head and tail entity, iteratively: 40*2*51
 #     test_pos_entity_des=test_data[1]        #matrix, each row for a examle: 20*2*51
@@ -111,22 +115,22 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
     
 
     train_sizes=[len(train_pos_entity_char), len(train_pos_entity_des), len(train_relations), len(train_entity_char_lengths), len(train_entity_des_lengths),\
-           len(train_relation_lengths), len(train_mention_char_ids), len(train_remainQ_word_ids), len(train_mention_char_lens), len(train_remainQ_word_len), len(entity_scores)]
+           len(train_relation_lengths), len(train_mention_char_ids), len(train_remainQ_word_ids), len(train_mention_char_lens), len(train_remainQ_word_len), len(train_entity_scores)]
     if sum(train_sizes)/len(train_sizes)!=train_size:
         print 'weird size:', train_sizes
         exit(0)
-#     expected_test_size=len(test_pos_entity_char)
-#     test_sizes=[len(test_pos_entity_char), len(test_pos_entity_des), len(test_relations), len(test_entity_char_lengths), len(test_entity_des_lengths),\
-#            len(test_relation_lengths), len(test_mention_char_ids), len(test_remainQ_word_ids), len(test_mention_char_lens), len(test_remainQ_word_len)]
-#     if sum(test_sizes)/len(test_sizes)!=expected_test_size:
-#         print 'weird size:', test_sizes
-#         exit(0)
+
+    test_sizes=[len(test_pos_entity_char), len(test_pos_entity_des), len(test_relations), len(test_entity_char_lengths), len(test_entity_des_lengths),\
+           len(test_relation_lengths), len(test_mention_char_ids), len(test_remainQ_word_ids), len(test_mention_char_lens), len(test_remainQ_word_len), len(test_entity_scores)]
+    if sum(test_sizes)/len(test_sizes)!=test_size:
+        print 'weird size:', test_sizes
+        exit(0)
 
     n_train_batches=train_size/batch_size
-#     n_test_batches=expected_test_size/batch_size
+    n_test_batches=test_size/batch_size
     
     train_batch_start=list(numpy.arange(n_train_batches)*batch_size)
-#     test_batch_start=list(numpy.arange(n_test_batches)*batch_size)
+    test_batch_start=list(numpy.arange(n_test_batches)*batch_size)
     
     indices_train_pos_entity_char=pythonList_into_theanoIntMatrix(train_pos_entity_char)
     indices_train_pos_entity_des=pythonList_into_theanoIntMatrix(train_pos_entity_des)
@@ -138,7 +142,7 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
     indices_train_remainQ_word_ids=pythonList_into_theanoIntMatrix(train_remainQ_word_ids)
     indices_train_mention_char_lens=pythonList_into_theanoIntMatrix(train_mention_char_lens)
     indices_train_remainQ_word_len=pythonList_into_theanoIntMatrix(train_remainQ_word_len)   
-    indices_train_entity_scores=pythonList_into_theanoIntMatrix(entity_scores) 
+    indices_train_entity_scores=pythonList_into_theanoFloatMatrix(train_entity_scores) 
     
 #     indices_test_pos_entity_char=pythonList_into_theanoIntMatrix(test_pos_entity_char)
 #     indices_test_pos_entity_des=pythonList_into_theanoIntMatrix(test_pos_entity_des)
@@ -150,7 +154,7 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
 #     indices_test_remainQ_word_ids=pythonList_into_theanoIntMatrix(test_remainQ_word_ids)
 #     indices_test_mention_char_lens=pythonList_into_theanoIntMatrix(test_mention_char_lens)
 #     indices_test_remainQ_word_len=pythonList_into_theanoIntMatrix(test_remainQ_word_len)   
-
+#     indices_test_entity_scores=pythonList_into_theanoIntMatrix(test_entity_scores)
 
     rand_values=random_value_normal((vocab_size+1, emb_size), theano.config.floatX, numpy.random.RandomState(1234))
     rand_values[0]=numpy.array(numpy.zeros(emb_size),dtype=theano.config.floatX)
@@ -310,7 +314,23 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
 #             q_word_ids : indices_test_remainQ_word_ids[index],
 #             q_word_lens : indices_test_remainQ_word_len[index]}, on_unused_input='ignore')
 
-
+    test_model = theano.function([ent_char_ids_M, ent_lens_M, men_char_ids_M, men_lens_M, rel_word_ids_M, rel_word_lens_M, desH_word_ids_M, desH_word_lens_M,
+                                  q_word_ids_M, q_word_lens_M, ent_scores], [loss_simi, simi_list],on_unused_input='ignore')
+#           givens={
+#             ent_char_ids_M : test_pos_entity_char[index].reshape((length_per_example_test[index], max_char_len)),  
+#             ent_lens_M : test_entity_char_lengths[index].reshape((length_per_example_test[index], 3)),
+#             men_char_ids_M : test_mention_char_ids[index].reshape((length_per_example_test[index], max_char_len)),  
+#             men_lens_M : test_mention_char_lens[index].reshape((length_per_example_test[index], 3)),
+#             rel_word_ids_M : test_relations[index].reshape((length_per_example_test[index], max_relation_len)),  
+#             rel_word_lens_M : test_relation_lengths[index].reshape((length_per_example_test[index], 3)),
+#             desH_word_ids_M : test_pos_entity_des[index].reshape((length_per_example_test[index], max_des_len)), 
+#             desH_word_lens_M : test_entity_des_lengths[index].reshape((length_per_example_test[index], 3)),
+# #             desT_word_ids_M : indices_train_pos_entity_des[index].reshape(((neg_all)*2, max_des_len))[1::2], 
+# #             desT_word_lens_M : indices_train_entity_des_lengths[index].reshape(((neg_all)*2, 3))[1::2],
+#             q_word_ids_M : test_remainQ_word_ids[index].reshape((length_per_example_test[index], max_Q_len)), 
+#             q_word_lens_M : test_remainQ_word_len[index].reshape((length_per_example_test[index], 3)),
+#             ent_scores : test_entity_scores[index]},
+                                  
     #params = layer3.params + layer2.params + layer1.params+ [conv_W, conv_b]
     params = [char_embeddings, embeddings, char_conv_W, char_conv_b, q_rel_conv_W, q_rel_conv_b, q_desH_conv_W, q_desH_conv_b]#+[embeddings]# + layer1.params 
 #     params_conv = [conv_W, conv_b]
@@ -391,18 +411,6 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
         #for minibatch_index in xrange(n_train_batches): # each batch
         minibatch_index=0
 
-#         ent_char_ids_M_train = indices_train_pos_entity_char[index].reshape(((train_neg_size+1)*2, max_char_len))[::2],  
-#         ent_lens_M : indices_train_entity_char_lengths[index].reshape(((train_neg_size+1)*2, 3))[::2],
-#         men_char_ids : indices_train_mention_char_ids[index],
-#         men_lens : indices_train_mention_char_lens[index],
-#         rel_word_ids_M : indices_train_relations[index].reshape((train_neg_size+1, max_relation_len)),
-#         rel_word_lens_M : indices_train_relation_lengths[index].reshape((train_neg_size+1, 3)),
-#         desH_word_ids_M : indices_train_pos_entity_des[index].reshape(((train_neg_size+1)*2, max_des_len))[::2], 
-#         desH_word_lens_M : indices_train_entity_des_lengths[index].reshape(((train_neg_size+1)*2, 3))[::2],
-#         desT_word_ids_M : indices_train_pos_entity_des[index].reshape(((train_neg_size+1)*2, max_des_len))[1::2], 
-#         desT_word_lens_M : indices_train_entity_des_lengths[index].reshape(((train_neg_size+1)*2, 3))[1::2],
-#         q_word_ids : indices_train_remainQ_word_ids[index],
-#         q_word_lens : indices_train_remainQ_word_len[index]}, on_unused_input='ignore')
 
         for batch_start in train_batch_start: 
             # iter means how many batches have been runed, taking into loop
@@ -413,32 +421,52 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
             sample_indices=[0]+random.sample(range(1, neg_all), train_neg_size-1)
             loss_simi_i, cost_i= train_model(batch_start, sample_indices)
             if batch_start%1==0:
-                print batch_start, 'loss_simi_i: ', loss_simi_i, 'cost_i:', cost_i
+                print batch_start, '\t loss_simi_i: ', loss_simi_i, 'cost_i:', cost_i
 
             if iter % n_train_batches == 0:
-                print 'training @ iter = '+str(iter)+'loss_simi_i: ', loss_simi_i, 'cost_i:', cost_i
+                print 'training @ iter = '+str(iter)+'\tloss_simi_i: ', loss_simi_i, 'cost_i:', cost_i
             #if iter ==1:
             #    exit(0)
 #             
-#             if iter % validation_frequency == 0:
-#                 #write_file=open('log.txt', 'w')
-#                 test_loss=[]
-#                 succ=0
-#                 for i in test_batch_start:
-#                     loss_simi_i,simi_list_i=test_model(i)
-#                     test_loss.append(loss_simi_i)
-#                     if simi_list_i[0]>=max(simi_list_i[1:]):
-#                         succ+=1
-# 
-#                 succ=succ*1.0/len(expected_test_size)
-#                 #now, check MAP and MRR
-#                 print(('\t\t\t\t\t\tepoch %i, minibatch %i/%i, test accu of best '
-#                            'model %f') %
-#                           (epoch, minibatch_index, n_train_batches,succ))
-# 
-#                 if best_test_accu< succ:
-#                     best_test_accu=succ
-#                     store_model_to_file(rootPath, params)
+            if iter % validation_frequency == 0:
+                
+                test_loss=[]
+                succ=0
+                for i in range(test_size):
+                    print 'testing', i, '...'
+                    #prepare data
+                    test_ent_char_ids_M= numpy.asarray(test_pos_entity_char[i], dtype='int64').reshape((length_per_example_test[i], max_char_len))  
+                    test_ent_lens_M = numpy.asarray(test_entity_char_lengths[i], dtype='int64').reshape((length_per_example_test[i], 3))
+                    test_men_char_ids_M = numpy.asarray(test_mention_char_ids[i], dtype='int64').reshape((length_per_example_test[i], max_char_len))
+                    test_men_lens_M = numpy.asarray(test_mention_char_lens[i], dtype='int64').reshape((length_per_example_test[i], 3))
+                    test_rel_word_ids_M = numpy.asarray(test_relations[i], dtype='int64').reshape((length_per_example_test[i], max_relation_len))  
+                    test_rel_word_lens_M = numpy.asarray(test_relation_lengths[i], dtype='int64').reshape((length_per_example_test[i], 3))
+                    test_desH_word_ids_M =numpy.asarray( test_pos_entity_des[i], dtype='int64').reshape((length_per_example_test[i], max_des_len))
+                    test_desH_word_lens_M = numpy.asarray(test_entity_des_lengths[i], dtype='int64').reshape((length_per_example_test[i], 3))
+                    test_q_word_ids_M = numpy.asarray(test_remainQ_word_ids[i], dtype='int64').reshape((length_per_example_test[i], max_Q_len))
+                    test_q_word_lens_M = numpy.asarray(test_remainQ_word_len[i], dtype='int64').reshape((length_per_example_test[i], 3))
+                    test_ent_scores = numpy.asarray(test_entity_scores[i], dtype=theano.config.floatX)
+            
+            
+            
+            
+                               
+                    loss_simi_i,simi_list_i=test_model(test_ent_char_ids_M, test_ent_lens_M, test_men_char_ids_M, test_men_lens_M, test_rel_word_ids_M, test_rel_word_lens_M,
+                                                       test_desH_word_ids_M, test_desH_word_lens_M, test_q_word_ids_M, test_q_word_lens_M, test_ent_scores)
+                    print 'simi_list_i:', simi_list_i[:10]
+                    test_loss.append(loss_simi_i)
+                    if simi_list_i[0]>=max(simi_list_i[1:]):
+                        succ+=1
+ 
+                succ=succ*1.0/test_size
+                #now, check MAP and MRR
+                print(('\t\t\t\t\t\tepoch %i, minibatch %i/%i, test accu of best '
+                           'model %f') %
+                          (epoch, minibatch_index, n_train_batches,succ))
+ 
+                if best_test_accu< succ:
+                    best_test_accu=succ
+                    store_model_to_file(rootPath, params)
             if patience <= iter:
                 done_looping = True
                 break
