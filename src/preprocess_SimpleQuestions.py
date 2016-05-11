@@ -1375,7 +1375,7 @@ if __name__ == '__main__':
 #     FB2M_id2str_id2des()
 #     tokenize_id2NameDes()
 #     HowMany_GroundTruthMID_HaveName()
-    FB2M_SimpleQA_EntityLinking()
+#     FB2M_SimpleQA_EntityLinking()
 #     Remove_EntityLinkingFailed_TestValid()
 #     filter_test_valid_by_unentitylinked()
 #     EntityLinkingResult_into_TrainModelInput_TestValid()
