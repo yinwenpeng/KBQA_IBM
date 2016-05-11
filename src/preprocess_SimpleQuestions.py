@@ -148,7 +148,7 @@ def    load_id2names_id2des():
     readfile.close()
     return id2names, id2des  
 def    load_id2names_word2ids():
-                readfile=codecs.open('/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/freebase-subsets/freebase-FB5M-id2NameDes.txt', 'r', 'utf-8')
+                readfile=codecs.open('/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/freebase-subsets/freebase-FB2M-id2NameDes.txt', 'r', 'utf-8')
                 id2names={}
                 word2ids={}
 #                 threegram2ids={}
@@ -824,27 +824,29 @@ def load_gold_head_ids(infile):
     return id_list
 def FB2M_SimpleQA_EntityLinking():
 #     id2names, word2ids, threegram2ids, fourgram2ids, fivegram2ids, mention2ids=    load_id2names_word2ids_3gram2ids_4gram2ids_5gram2ids_mention2ids()
-    N=20
+    N=100
 #     postag_imp={'NN':1, 'NNS':1, 'NNP':1, 'NNPS':1, 'FW':1, 'WP':0, 'WDT':0, 'JJ':0.5, 'CD':0.8}
     
     id2names, word2ids=    load_id2names_word2ids()
     path='/mounts/data/proj/wenpeng/Dataset/freebase/SimpleQuestions_v2/'
     files=['annotated_fb_data_test.questions_stanfordTokenized.txt', 'annotated_fb_data_valid.questions_stanfordTokenized.txt', 'annotated_fb_data_train.questions_stanfordTokenized.txt']   
     q_files=['annotated_fb_data_test.txt', 'annotated_fb_data_valid.txt', 'annotated_fb_data_train.txt']
-    for i in range(3):
+    for i in range(2):
         print i, '...'
         readfile=codecs.open(path+files[i], 'r', 'utf-8')
         if i==0:
-            writefile=codecs.open(path+'annotated_fb_data_test.entitylinking.top'+str(N)+'.FB5M.txt', 'w', 'utf-8')
+            writefile=codecs.open(path+'annotated_fb_data_test.entitylinking.top'+str(N)+'.FB2M.newFormat.txt', 'w', 'utf-8')
         elif i==1:
-            writefile=codecs.open(path+'annotated_fb_data_valid.entitylinking.top'+str(N)+'.FB5M.txt', 'w', 'utf-8')
+            writefile=codecs.open(path+'annotated_fb_data_valid.entitylinking.top'+str(N)+'.FB2M.newFormat.txt', 'w', 'utf-8')
         else:
-            writefile=codecs.open(path+'annotated_fb_data_train.entitylinking.top'+str(N)+'.FB5M.txt', 'w', 'utf-8')
+            writefile=codecs.open(path+'annotated_fb_data_train.entitylinking.top'+str(N)+'.FB2M.newFormat.txt', 'w', 'utf-8')
         gold_id_list=load_gold_head_ids(path+q_files[i])
         line_co=0
 #         example_size=len(gold_id_list)
         succ_size=0
         top1=0
+        top20=0
+        top50=0
 #         sum_cand_size=0
         uncover_size=0
         start_time = time.clock()
@@ -874,17 +876,25 @@ def FB2M_SimpleQA_EntityLinking():
                 continue
             top_N_ids, top_id2simi, top_id2simi_1, top_id2simi_2, top_id2simi_3, all_id2score, all_id2simi_1, all_id2simi_2, all_id2simi_3=ranking_ids_topN(question_list, overall_ids, id2names, N)
             gold_mid=gold_id_list[line_co]
-            if i==0 or i==1:
             
+            
+            if i==0 or i==1:
+                gold_position=N
                 if gold_mid in set(top_N_ids):
-                    if gold_mid==top_N_ids[0]:
-                        top1+=1
-                    top_N_ids.remove(gold_mid)
-                    writefile.write('1\t'+gold_mid+'=='+str(top_id2simi.get(gold_mid))+'=='+str(top_id2simi_1.get(gold_mid))+'=='+str(top_id2simi_2.get(gold_mid))+'=='+str(top_id2simi_3.get(gold_mid))\
-                                    +'\t'+'\t'.join([idd+'=='+str(top_id2simi.get(idd))+'=='+str(top_id2simi_1.get(idd))+'=='+str(top_id2simi_2.get(idd))+'=='+str(top_id2simi_3.get(idd)) for idd in top_N_ids])+'\t'+question+'\n')
                     succ_size+=1
-                else:
-                    writefile.write('0\t'+'\t'.join([idd+'=='+str(top_id2simi.get(idd))+'=='+str(top_id2simi_1.get(idd))+'=='+str(top_id2simi_2.get(idd))+'=='+str(top_id2simi_3.get(idd)) for idd in top_N_ids])+'\t'+question+'\n')
+                    gold_position=top_N_ids.index(gold_mid)
+                    if gold_position==0:
+                        top1+=1
+                    if gold_position<20:
+                        top20+=1
+                    if gold_position<50:
+                        top50+=1
+#                     top_N_ids.remove(gold_mid)
+                writefile.write(str(gold_position)\
+                                    +'\t'+'\t'.join([idd+'=='+str(top_id2simi.get(idd))+'=='+str(top_id2simi_1.get(idd))+'=='+str(top_id2simi_2.get(idd))+'=='+str(top_id2simi_3.get(idd)) for idd in top_N_ids])+'\t'+question+'\n')
+                    
+
+#                     writefile.write('0\t'+'\t'.join([idd+'=='+str(top_id2simi.get(idd))+'=='+str(top_id2simi_1.get(idd))+'=='+str(top_id2simi_2.get(idd))+'=='+str(top_id2simi_3.get(idd)) for idd in top_N_ids])+'\t'+question+'\n')
             else:
                 if gold_mid in set(top_N_ids):
                     succ_size+=1
@@ -900,7 +910,7 @@ def FB2M_SimpleQA_EntityLinking():
             line_co+=1
             
             if line_co%100==0:
-                print line_co, 'succ rato:', succ_size*1.0/line_co,'top1 rato:', top1*1.0/line_co, 'uncover_size:',uncover_size,         'uses ', (time.clock()-start_time)/60.0, 'min'
+                print line_co, 'top1:', top1*1.0/line_co,'top20:', top20*1.0/line_co,'top50:', top50*1.0/line_co,'top100:', succ_size*1.0/line_co, 'uncover_size:',uncover_size,         'uses ', (time.clock()-start_time)/60.0, 'min'
 
 #             if line_co==6:
 #                 exit(0)
@@ -1365,11 +1375,11 @@ if __name__ == '__main__':
 #     FB2M_id2str_id2des()
 #     tokenize_id2NameDes()
 #     HowMany_GroundTruthMID_HaveName()
-#     FB2M_SimpleQA_EntityLinking()
+    FB2M_SimpleQA_EntityLinking()
 #     Remove_EntityLinkingFailed_TestValid()
 #     filter_test_valid_by_unentitylinked()
 #     EntityLinkingResult_into_TrainModelInput_TestValid()
-    EntityLinkingResult_into_TrainModelInput_Train()
+#     EntityLinkingResult_into_TrainModelInput_Train()
 # 
 #     a=list('what time zone is marrakech in ?')
 #     b=list('marrakesh')
