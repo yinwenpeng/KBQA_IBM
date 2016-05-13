@@ -472,7 +472,7 @@ def load_test_or_valid(testfile, char2id, word2id, max_char_len, max_des_len, ma
     print 'load', line_co, 'test examples over'
 
     return result, length_per_example, word2id, char2id        
-def load_train(trainfile, testfile, max_char_len, max_des_len, max_relation_len, max_Q_len, train_size, test_size):
+def load_train(trainfile, testfile, max_char_len, max_des_len, max_relation_len, max_Q_len, train_size, test_size, mark):
     #load char_vocab, word_vocab
     char2id={}
     word2id={}
@@ -629,14 +629,14 @@ def load_train(trainfile, testfile, max_char_len, max_des_len, max_relation_len,
 
     result_test, length_per_example_test, word2id, char2id  = load_test_or_valid(testfile, char2id, word2id, max_char_len, max_des_len, max_relation_len, max_Q_len, test_size)
 
-    read_char_file=codecs.open(path+'char_ids.txt', 'w', 'utf-8')
+    read_char_file=codecs.open(path+'char_ids'+mark+'.txt', 'w', 'utf-8')
     for char, id in char2id.iteritems():
         read_char_file.write(char+'\t'+str(id)+'\n')
     read_char_file.close()
     print 'char ids written over'
 
 
-    read_word_file=codecs.open(path+'word_vocab.txt', 'w', 'utf-8')
+    read_word_file=codecs.open(path+'word_vocab'+mark+'.txt', 'w', 'utf-8')
     for word, id in word2id.iteritems():
         read_word_file.write(word+'\t'+str(id)+'\n')
     read_word_file.close()
@@ -656,7 +656,7 @@ def load_train(trainfile, testfile, max_char_len, max_des_len, max_relation_len,
             glove[tokens[0]]=map(float, tokens[1:])
     readFile.close()
     print 'glove loaded over...'  
-    write_word_emb=codecs.open(path+'word_emb.txt', 'w', 'utf-8')
+    write_word_emb=codecs.open(path+'word_emb'+mark+'.txt', 'w', 'utf-8')
     random_emb=list(numpy.random.uniform(-0.01,0.01,dim))     
     for word, id in word2id.iteritems():
         emb=glove.get(word, random_emb)
@@ -665,6 +665,27 @@ def load_train(trainfile, testfile, max_char_len, max_des_len, max_relation_len,
     print 'initialized word embs written over'
     return result, result_test, length_per_example_test, len(word2id), len(char2id)   
     
+def load_word2id_char2id():
+    word2id={}
+    char2id={}
+    read_wordfile=codecs.open(path+'word_vocab.txt', 'r', 'utf-8')
+    for line in read_wordfile:
+        parts=line.strip().split('\t')
+        word2id[parts[0]]=int(parts[1])
+    read_wordfile.close()
+    print 'load word2id over'
+    read_charfile=codecs.open(path+'char_ids.txt', 'r', 'utf-8')
+    for line in read_charfile:
+        parts=line.strip().split()
+        if len(parts)==1:
+#             print line, parts[0]
+            char2id[' ']=int(parts[0])
+
+        else:
+            char2id[parts[0]]=int(parts[1])
+    read_charfile.close()
+    print 'load char2id over'
+    return word2id, char2id
     
 if __name__ == '__main__':
 

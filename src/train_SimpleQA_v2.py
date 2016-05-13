@@ -56,11 +56,11 @@ Doesnt work:
 8) euclid uses 1/exp(x)
 '''
 
-def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nkerns=4, batch_size=1, window_width=3,
-                    emb_size=50, char_emb_size=4, hidden_size=200,
+def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=50, char_nkerns=20, batch_size=1, window_width=[2, 5],
+                    emb_size=50, char_emb_size=20, hidden_size=200,
                     margin=0.5, L2_weight=0.0003, update_freq=1, norm_threshold=5.0, max_truncate=40, 
-                    max_char_len=40, max_des_len=20, max_relation_len=5, max_Q_len=30, train_neg_size=6, 
-                    test_neg_size=5, valid_neg_size=5, neg_all=100, train_size=50, test_size=20):
+                    max_char_len=40, max_des_len=20, max_relation_len=5, max_Q_len=30, train_neg_size=21, 
+                    neg_all=100, train_size=500, test_size=500, mark='_500_500_char20_win25'):  #train_size=75909, test_size=17386
 #     maxSentLength=max_truncate+2*(window_width-1)
     model_options = locals().copy()
     print "model options", model_options
@@ -68,7 +68,7 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
     triple_files=['annotated_fb_data_train.entitylinking.top20_succSet_asInput.txt', 'annotated_fb_data_test.entitylinking.top20_succSet_asInput.txt']
 
     rng = numpy.random.RandomState(23455)
-    datasets, datasets_test, length_per_example_test, vocab_size, char_size=load_train(triple_files[0], triple_files[1], max_char_len, max_des_len, max_relation_len, max_Q_len, train_size, test_size)#max_char_len, max_des_len, max_relation_len, max_Q_len
+    datasets, datasets_test, length_per_example_test, vocab_size, char_size=load_train(triple_files[0], triple_files[1], max_char_len, max_des_len, max_relation_len, max_Q_len, train_size, test_size, mark)#max_char_len, max_des_len, max_relation_len, max_Q_len
 
     
     print 'vocab_size:', vocab_size, 'char_size:', char_size
@@ -159,7 +159,7 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
     rand_values=random_value_normal((vocab_size+1, emb_size), theano.config.floatX, numpy.random.RandomState(1234))
     rand_values[0]=numpy.array(numpy.zeros(emb_size),dtype=theano.config.floatX)
     #rand_values[0]=numpy.array([1e-50]*emb_size)
-    rand_values=load_word2vec_to_init(rand_values, rootPath+'word_emb.txt')
+    rand_values=load_word2vec_to_init(rand_values, rootPath+'word_emb'+mark+'.txt')
     embeddings=theano.shared(value=rand_values, borrow=True)      
 
     char_rand_values=random_value_normal((char_size+1, char_emb_size), theano.config.floatX, numpy.random.RandomState(1234))
@@ -191,8 +191,8 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
 #     des_ishape=(emb_size, max_des_len)
 #     q_ishape=(emb_size, max_Q_len)
     
-    filter_size=(emb_size,window_width)
-    char_filter_size=(char_emb_size, window_width)
+    filter_size=(emb_size,window_width[0])
+    char_filter_size=(char_emb_size, window_width[1])
     #poolsize1=(1, ishape[1]-filter_size[1]+1) #?????????????????????????????
 #     length_after_wideConv=ishape[1]+filter_size[1]-1
     
@@ -207,7 +207,8 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
     char_conv_W, char_conv_b=create_conv_para(rng, filter_shape=char_filter_shape)
     q_rel_conv_W, q_rel_conv_b=create_conv_para(rng, filter_shape=word_filter_shape)
     q_desH_conv_W, q_desH_conv_b=create_conv_para(rng, filter_shape=word_filter_shape)
-#     q_desT_conv_W, q_desT_conv_b=create_conv_para(rng, filter_shape=word_filter_shape)
+    params = [char_embeddings, embeddings, char_conv_W, char_conv_b, q_rel_conv_W, q_rel_conv_b, q_desH_conv_W, q_desH_conv_b]
+#     load_model_from_file(rootPath, params, '')
 
     def SimpleQ_matches_Triple(ent_char_ids_f,ent_lens_f,rel_word_ids_f,rel_word_lens_f,desH_word_ids_f,
                        desH_word_lens_f,
@@ -271,9 +272,10 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
 #         desT_conv_pool=Max_Pooling(rng, input_l=desT_conv.output, left_l=desT_word_lens_f[0], right_l=desT_word_lens_f[2])    
         
         
-        overall_simi=cosine(ent_conv_pool.output_maxpooling, men_conv_pool.output_maxpooling)+\
+        overall_simi=(cosine(ent_conv_pool.output_maxpooling, men_conv_pool.output_maxpooling)+\
                     cosine(q_rel_pool.output_maxpooling, rel_conv_pool.output_maxpooling)+\
-                    cosine(q_desH_pool.output_maxpooling, desH_conv_pool.output_maxpooling)
+                    0.1*cosine(q_desH_pool.output_maxpooling, desH_conv_pool.output_maxpooling))/3.0
+
 #                     cosine(q_desT_pool.output_maxpooling, desT_conv_pool.output_maxpooling)
         return overall_simi
     
@@ -283,10 +285,12 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
                    desH_word_lens_M,
                    men_char_ids_M, q_word_ids_M, men_lens_M, q_word_lens_M])
     
+    simi_list+=0.5*ent_scores
+    
     posi_simi=simi_list[0]
     nega_simies=simi_list[1:]
     loss_simi_list=T.maximum(0.0, margin-posi_simi.reshape((1,1))+nega_simies) 
-    loss_simi=T.sum(loss_simi_list)
+    loss_simi=T.mean(loss_simi_list)
 
     
 
@@ -298,21 +302,7 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
     #cost=debug_print((cost_this+cost_tmp)/update_freq, 'cost')
     
 
-    
-#     test_model = theano.function([index], [loss_simi,simi_list],
-#           givens={
-#             ent_char_ids_M : indices_test_pos_entity_char[index].reshape(((test_neg_size+1)*2, max_char_len))[::2],  
-#             ent_lens_M : indices_test_entity_char_lengths[index].reshape(((test_neg_size+1)*2, 3))[::2],
-#             men_char_ids : indices_test_mention_char_ids[index],
-#             men_lens : indices_test_mention_char_lens[index],
-#             rel_word_ids_M : indices_test_relations[index].reshape((test_neg_size+1, max_relation_len)),
-#             rel_word_lens_M : indices_test_relation_lengths[index].reshape((test_neg_size+1, 3)),
-#             desH_word_ids_M : indices_test_pos_entity_des[index].reshape(((test_neg_size+1)*2, max_des_len))[::2], 
-#             desH_word_lens_M : indices_test_entity_des_lengths[index].reshape(((test_neg_size+1)*2, 3))[::2],
-#             desT_word_ids_M : indices_test_pos_entity_des[index].reshape(((test_neg_size+1)*2, max_des_len))[1::2], 
-#             desT_word_lens_M : indices_test_entity_des_lengths[index].reshape(((test_neg_size+1)*2, 3))[1::2],
-#             q_word_ids : indices_test_remainQ_word_ids[index],
-#             q_word_lens : indices_test_remainQ_word_len[index]}, on_unused_input='ignore')
+
 
     test_model = theano.function([ent_char_ids_M, ent_lens_M, men_char_ids_M, men_lens_M, rel_word_ids_M, rel_word_lens_M, desH_word_ids_M, desH_word_lens_M,
                                   q_word_ids_M, q_word_lens_M, ent_scores], [loss_simi, simi_list],on_unused_input='ignore')
@@ -332,7 +322,7 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
 #             ent_scores : test_entity_scores[index]},
                                   
     #params = layer3.params + layer2.params + layer1.params+ [conv_W, conv_b]
-    params = [char_embeddings, embeddings, char_conv_W, char_conv_b, q_rel_conv_W, q_rel_conv_b, q_desH_conv_W, q_desH_conv_b]#+[embeddings]# + layer1.params 
+    #+[embeddings]# + layer1.params 
 #     params_conv = [conv_W, conv_b]
     
     accumulator=[]
@@ -415,25 +405,26 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
         for batch_start in train_batch_start: 
             # iter means how many batches have been runed, taking into loop
             iter = (epoch - 1) * n_train_batches + minibatch_index +1
-
+ 
             minibatch_index=minibatch_index+1
             #print batch_start
             sample_indices=[0]+random.sample(range(1, neg_all), train_neg_size-1)
             loss_simi_i, cost_i= train_model(batch_start, sample_indices)
-            if batch_start%1==0:
-                print batch_start, '\t loss_simi_i: ', loss_simi_i, 'cost_i:', cost_i
-
+#             if batch_start%1==0:
+#                 print batch_start, '\t loss_simi_i: ', loss_simi_i, 'cost_i:', cost_i
+#                 store_model_to_file(rootPath, params)
+ 
             if iter % n_train_batches == 0:
                 print 'training @ iter = '+str(iter)+'\tloss_simi_i: ', loss_simi_i, 'cost_i:', cost_i
             #if iter ==1:
             #    exit(0)
 #             
-            if iter % validation_frequency == 0:
-                
+            if iter % n_train_batches == 0:
+                 
                 test_loss=[]
                 succ=0
                 for i in range(test_size):
-                    print 'testing', i, '...'
+#                     print 'testing', i, '...'
                     #prepare data
                     test_ent_char_ids_M= numpy.asarray(test_pos_entity_char[i], dtype='int64').reshape((length_per_example_test[i], max_char_len))  
                     test_ent_lens_M = numpy.asarray(test_entity_char_lengths[i], dtype='int64').reshape((length_per_example_test[i], 3))
@@ -446,27 +437,27 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
                     test_q_word_ids_M = numpy.asarray(test_remainQ_word_ids[i], dtype='int64').reshape((length_per_example_test[i], max_Q_len))
                     test_q_word_lens_M = numpy.asarray(test_remainQ_word_len[i], dtype='int64').reshape((length_per_example_test[i], 3))
                     test_ent_scores = numpy.asarray(test_entity_scores[i], dtype=theano.config.floatX)
-            
-            
-            
-            
-                               
+             
+             
+             
+             
+                                
                     loss_simi_i,simi_list_i=test_model(test_ent_char_ids_M, test_ent_lens_M, test_men_char_ids_M, test_men_lens_M, test_rel_word_ids_M, test_rel_word_lens_M,
                                                        test_desH_word_ids_M, test_desH_word_lens_M, test_q_word_ids_M, test_q_word_lens_M, test_ent_scores)
-                    print 'simi_list_i:', simi_list_i[:10]
+#                     print 'simi_list_i:', simi_list_i[:10]
                     test_loss.append(loss_simi_i)
                     if simi_list_i[0]>=max(simi_list_i[1:]):
                         succ+=1
- 
+#                     print 'testing', i, '...acc:', succ*1.0/(i+1)
                 succ=succ*1.0/test_size
                 #now, check MAP and MRR
                 print(('\t\t\t\t\t\tepoch %i, minibatch %i/%i, test accu of best '
                            'model %f') %
                           (epoch, minibatch_index, n_train_batches,succ))
- 
+
                 if best_test_accu< succ:
                     best_test_accu=succ
-                    store_model_to_file(rootPath, params)
+                    store_model_to_file(rootPath, params, mark)
             if patience <= iter:
                 done_looping = True
                 break
@@ -485,23 +476,19 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=10, char_nker
                           ' ran for %.2fm' % ((end_time - start_time) / 60.))
 
 
-def store_model_to_file(path, best_params):
-    save_file = open(path+'Best_Conv_Para', 'wb')  # this will overwrite current contents
+def store_model_to_file(path, best_params, mark):
+    save_file = open(path+'Best_Conv_Para'+mark, 'wb')  # this will overwrite current contents
     for para in best_params:           
         cPickle.dump(para.get_value(borrow=True), save_file, -1)  # the -1 is for HIGHEST_PROTOCOL
     save_file.close()
     print 'Better model stored'
 
-# def cosine(vec1, vec2):
-#     vec1=debug_print(vec1, 'vec1')
-#     vec2=debug_print(vec2, 'vec2')
-#     norm_uni_l=T.sqrt((vec1**2).sum())
-#     norm_uni_r=T.sqrt((vec2**2).sum())
-#     
-#     dot=T.dot(vec1,vec2.T)
-#     
-#     simi=debug_print(dot/(norm_uni_l*norm_uni_r), 'uni-cosine')
-#     return simi.reshape((1,1))    
+def load_model_from_file(path, params, acc):
+    save_file = open(path+'Best_Conv_Para'+str(acc))
+    for para in params:
+        para.set_value(cPickle.load(save_file), borrow=True)
+    save_file.close()   
+    print 'model initialized over'   
 def Linear(sum_uni_l, sum_uni_r):
     return (T.dot(sum_uni_l,sum_uni_r.T)).reshape((1,1))    
 def Poly(sum_uni_l, sum_uni_r):

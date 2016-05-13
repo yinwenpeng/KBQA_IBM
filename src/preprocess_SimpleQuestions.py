@@ -1394,7 +1394,8 @@ if __name__ == '__main__':
 #     c=list(mention_detection_given_questionAndEntity(a,b))
 #     print c
 
-
+    a=0.2345789
+    print str(a)[:4]
     
     
     
