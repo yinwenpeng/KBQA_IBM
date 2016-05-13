@@ -967,8 +967,86 @@ class Max_Pooling(object):
         input_l_matrix=debug_print(input_l.reshape((input_l.shape[2], input_l.shape[3])), 'origin_input_l_matrix')
         input_l_matrix=debug_print(input_l_matrix[:, left_l:(input_l_matrix.shape[1]-right_l)],'input_l_matrix')
         self.output_maxpooling=T.max(input_l_matrix, axis=1)
+
+def compute_simi_feature_matrix_with_column(input_l_matrix, column, length_l, length_r, dim):
+    column=column.reshape((column.shape[0],1))
+    repeated_2=T.repeat(column, dim, axis=1)[:,:length_l]
+    
+
+    
+    #cosine attention   
+    length_1=debug_print(1e-10+T.sqrt(T.sum(T.sqr(input_l_matrix), axis=0)),'length_1')
+    length_2=debug_print(1e-10+T.sqrt(T.sum(T.sqr(repeated_2), axis=0)), 'length_2')
+
+    multi=debug_print(input_l_matrix*repeated_2, 'multi')
+    sum_multi=debug_print(T.sum(multi, axis=0),'sum_multi')
+    
+    list_of_simi= debug_print(sum_multi/(length_1*length_2),'list_of_simi')   #to get rid of zero length
+    simi_matrix=debug_print(list_of_simi.reshape((length_l, length_r)), 'simi_matrix')
+    
+    
+#     #euclid, effective for wikiQA
+#     gap=debug_print(input_l_matrix-repeated_2, 'gap')
+#     eucli=debug_print(T.sqrt(1e-10+T.sum(T.sqr(gap), axis=0)),'eucli')
+#     simi_matrix=debug_print((1.0/(1.0+eucli)).reshape((length_l, length_r)), 'simi_matrix')
+    
+    
+    return simi_matrix#[:length_l, :length_r]       
+class Average_Pooling_for_SimpleQA(object):
+    """The input is output of Conv: a tensor.  The output here should also be tensor"""
+
+    def __init__(self, rng, input_l, input_r, left_l, right_l, length_l, dim, topk): # length_l, length_r: valid lengths after conv
+#     layer3_DQ=Average_Pooling_for_Top(rng, input_l=layer2_DQ.output, input_r=layer2_Q.output_sent_rep_Dlevel, kern=nkerns[1],
+#                      left_l=left_D, right_l=right_D, left_r=0, right_r=0, 
+#                       length_l=len_D+filter_sents[1]-1, length_r=1,
+#                        dim=maxDocLength+filter_sents[1]-1, topk=3)
+
+
+#         fan_in = kern #kern numbers
+#         # each unit in the lower layer receives a gradient from:
+#         # "num output feature maps * filter height * filter width" /
+#         #   pooling size
+#         fan_out = kern
+#         # initialize weights with random weights
+#         W_bound = numpy.sqrt(6. / (fan_in + fan_out))
+#         self.W = theano.shared(numpy.asarray(
+#             rng.uniform(low=-W_bound, high=W_bound, size=(kern, kern)),
+#             dtype=theano.config.floatX),
+#                                borrow=True) #a weight matrix kern*kern
         
-   
+        input_r_matrix=debug_print(input_r,'input_r_matrix')
+
+        input_l_matrix=debug_print(input_l.reshape((input_l.shape[2], input_l.shape[3])), 'origin_input_l_matrix')
+        input_l_matrix=debug_print(input_l_matrix[:, left_l:(input_l_matrix.shape[1]-right_l)],'input_l_matrix')
+
+            
+            
+        simi_matrix=compute_simi_feature_matrix_with_column(input_l_matrix, input_r_matrix, length_l, 1, dim) #(input.shape[0]/2, input.shape[1], input.shape[3], input.shape[3])
+        simi_question=debug_print(simi_matrix.reshape((1, length_l)),'simi_question')
+        
+        neighborsArgSorted = T.argsort(simi_question, axis=1)
+        kNeighborsArg = neighborsArgSorted[:,-topk:]#only average the top 3 vectors
+        kNeighborsArgSorted = T.sort(kNeighborsArg, axis=1) # make y indices in acending lie
+        jj = kNeighborsArgSorted.flatten()
+        sub_matrix=input_l_matrix.transpose(1,0)[jj].reshape((topk, input_l_matrix.shape[0]))
+#         sub_weights=simi_question.transpose(1,0)[jj].reshape((topk, 1))
+        
+#         sub_weights =sub_weights/T.sum(sub_weights) #L-1 normalize attentions
+        #weights_answer=simi_answer/T.sum(simi_answer)    
+        #concate=T.concatenate([weights_question, weights_answer], axis=1)
+        #reshaped_concate=concate.reshape((input.shape[0], 1, 1, length_last_dim))
+        
+#         sub_weights=T.repeat(sub_weights, kern, axis=1)
+        #weights_answer_matrix=T.repeat(weights_answer, kern, axis=0)
+        
+        #with attention
+#         output_D_doc_level_rep=debug_print(T.sum(sub_matrix*sub_weights, axis=0), 'output_D_doc_level_rep') # is a column now    
+        output_D_doc_level_rep=debug_print(T.max(sub_matrix, axis=0), 'output_D_doc_level_rep') # is a column now 
+        self.topk_max_pooling=output_D_doc_level_rep    
+        
+#         
+# 
+#         self.params = [self.W]   
 
 class Average_Pooling_for_Top(object):
     """The input is output of Conv: a tensor.  The output here should also be tensor"""

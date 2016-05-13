@@ -19,7 +19,7 @@ from theano.tensor.signal import downsample
 from theano.tensor.nnet import conv
 from load_data import load_train, load_word2vec_to_init#, load_mts_wikiQA, load_wmf_wikiQA
 from word2embeddings.nn.util import zero_value, random_value_normal
-from common_functions import Conv_with_input_para, Average_Pooling_for_Top, create_conv_para, pythonList_into_theanoIntMatrix, Max_Pooling, cosine, pythonList_into_theanoFloatMatrix
+from common_functions import Conv_with_input_para, Average_Pooling_for_SimpleQA, create_conv_para, pythonList_into_theanoIntMatrix, Max_Pooling, cosine, pythonList_into_theanoFloatMatrix
 from random import shuffle
 
 from sklearn import svm
@@ -56,11 +56,11 @@ Doesnt work:
 8) euclid uses 1/exp(x)
 '''
 
-def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=50, char_nkerns=20, batch_size=1, window_width=[2, 5],
-                    emb_size=50, char_emb_size=20, hidden_size=200,
+def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=50, char_nkerns=4, batch_size=1, window_width=[2, 5],
+                    emb_size=50, char_emb_size=4, hidden_size=200,
                     margin=0.5, L2_weight=0.0003, update_freq=1, norm_threshold=5.0, max_truncate=40, 
                     max_char_len=40, max_des_len=20, max_relation_len=5, max_Q_len=30, train_neg_size=21, 
-                    neg_all=100, train_size=500, test_size=500, mark='_500_500_char20_win25'):  #train_size=75909, test_size=17386
+                    neg_all=100, train_size=200, test_size=200, mark='_forfun'):  #train_size=75909, test_size=17386
 #     maxSentLength=max_truncate+2*(window_width-1)
     model_options = locals().copy()
     print "model options", model_options
@@ -262,8 +262,12 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=50, char_nker
         ent_conv_pool=Max_Pooling(rng, input_l=ent_char_conv.output, left_l=ent_lens_f[0], right_l=ent_lens_f[2])
         men_conv_pool=Max_Pooling(rng, input_l=men_char_conv.output, left_l=men_lens_f[0], right_l=men_lens_f[2])
         
-        q_rel_pool=Max_Pooling(rng, input_l=q_rel_conv.output, left_l=q_word_lens_f[0], right_l=q_word_lens_f[2])
+#         q_rel_pool=Max_Pooling(rng, input_l=q_rel_conv.output, left_l=q_word_lens_f[0], right_l=q_word_lens_f[2])
         rel_conv_pool=Max_Pooling(rng, input_l=rel_conv.output, left_l=rel_word_lens_f[0], right_l=rel_word_lens_f[2])
+        q_rel_pool=Average_Pooling_for_SimpleQA(rng, input_l=q_rel_conv.output, input_r=rel_conv_pool.output_maxpooling, 
+                                                left_l=q_word_lens_f[0], right_l=q_word_lens_f[2], length_l=q_word_lens_f[1]+filter_size[1]-1, 
+                                                dim=max_Q_len+filter_size[1]-1, topk=2)
+        
         
         q_desH_pool=Max_Pooling(rng, input_l=q_desH_conv.output, left_l=q_word_lens_f[0], right_l=q_word_lens_f[2])
         desH_conv_pool=Max_Pooling(rng, input_l=desH_conv.output, left_l=desH_word_lens_f[0], right_l=desH_word_lens_f[2])
@@ -273,7 +277,7 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=50, char_nker
         
         
         overall_simi=(cosine(ent_conv_pool.output_maxpooling, men_conv_pool.output_maxpooling)+\
-                    cosine(q_rel_pool.output_maxpooling, rel_conv_pool.output_maxpooling)+\
+                    cosine(q_rel_pool.topk_max_pooling, rel_conv_pool.output_maxpooling)+\
                     0.1*cosine(q_desH_pool.output_maxpooling, desH_conv_pool.output_maxpooling))/3.0
 
 #                     cosine(q_desT_pool.output_maxpooling, desT_conv_pool.output_maxpooling)
