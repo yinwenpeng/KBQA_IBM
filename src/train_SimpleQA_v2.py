@@ -19,7 +19,7 @@ from theano.tensor.signal import downsample
 from theano.tensor.nnet import conv
 from load_data import load_train, load_word2vec_to_init#, load_mts_wikiQA, load_wmf_wikiQA
 from word2embeddings.nn.util import zero_value, random_value_normal
-from common_functions import Conv_with_input_para, Average_Pooling_for_SimpleQA, create_conv_para, pythonList_into_theanoIntMatrix, Max_Pooling, cosine, pythonList_into_theanoFloatMatrix
+from common_functions import Conv_with_input_para, Average_Pooling_for_SimpleQA, create_conv_para, pythonList_into_theanoIntMatrix, Max_Pooling, cosine, pythonList_into_theanoFloatMatrix, Diversify_Reg
 from random import shuffle
 
 from sklearn import svm
@@ -58,7 +58,7 @@ Doesnt work:
 
 def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=50, char_nkerns=4, batch_size=1, window_width=[2, 5],
                     emb_size=50, char_emb_size=4, hidden_size=200,
-                    margin=0.5, L2_weight=0.0003, update_freq=1, norm_threshold=5.0, max_truncate=40, 
+                    margin=0.5, L2_weight=0.0003, Div_reg=0.03, update_freq=1, norm_threshold=5.0, max_truncate=40, 
                     max_char_len=40, max_des_len=20, max_relation_len=5, max_Q_len=30, train_neg_size=21, 
                     neg_all=100, train_size=200, test_size=200, mark='_forfun'):  #train_size=75909, test_size=17386
 #     maxSentLength=max_truncate+2*(window_width-1)
@@ -208,6 +208,9 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=50, char_nker
     q_rel_conv_W, q_rel_conv_b=create_conv_para(rng, filter_shape=word_filter_shape)
     q_desH_conv_W, q_desH_conv_b=create_conv_para(rng, filter_shape=word_filter_shape)
     params = [char_embeddings, embeddings, char_conv_W, char_conv_b, q_rel_conv_W, q_rel_conv_b, q_desH_conv_W, q_desH_conv_b]
+    char_conv_W_into_matrix=char_conv_W.reshape((char_conv_W.shape[0], char_conv_W.shape[2]*char_conv_W.shape[3]))
+    q_rel_conv_W_into_matrix=q_rel_conv_W.reshape((q_rel_conv_W.shape[0], q_rel_conv_W.shape[2]*q_rel_conv_W.shape[3]))
+    q_desH_conv_W_into_matrix=q_desH_conv_W.reshape((q_desH_conv_W.shape[0], q_desH_conv_W.shape[2]*q_desH_conv_W.shape[3]))
 #     load_model_from_file(rootPath, params, '')
 
     def SimpleQ_matches_Triple(ent_char_ids_f,ent_lens_f,rel_word_ids_f,rel_word_lens_f,desH_word_ids_f,
@@ -301,8 +304,8 @@ def evaluate_lenet5(learning_rate=0.05, n_epochs=2000, word_nkerns=50, char_nker
     
     #L2_reg =(layer3.W** 2).sum()+(layer2.W** 2).sum()+(layer1.W** 2).sum()+(conv_W** 2).sum()
     L2_reg =debug_print((char_embeddings** 2).sum()+(embeddings** 2).sum()+(char_conv_W** 2).sum()+(q_rel_conv_W** 2).sum()+(q_desH_conv_W** 2).sum(), 'L2_reg')#+(layer1.W** 2).sum()++(embeddings**2).sum()
-
-    cost=loss_simi+L2_weight*L2_reg
+    diversify_reg= Diversify_Reg(char_conv_W_into_matrix)+Diversify_Reg(q_rel_conv_W_into_matrix)+Diversify_Reg(q_desH_conv_W_into_matrix)
+    cost=loss_simi+L2_weight*L2_reg+Div_reg*diversify_reg
     #cost=debug_print((cost_this+cost_tmp)/update_freq, 'cost')
     
 
